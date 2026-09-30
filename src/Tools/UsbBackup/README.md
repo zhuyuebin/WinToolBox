@@ -18,7 +18,7 @@
 | 单文件 exe（推荐） | Windows 10 / 11（x64），双击 `UsbBackup.exe` 即可；发布包自包含 .NET 运行时，**免安装、无需预装 .NET** |
 | 从源码运行 | Windows 10 / 11（x64）+ .NET 8 SDK：`dotnet run --project src/Tools/UsbBackup/UsbBackup.csproj` |
 
-下载：打开 <https://github.com/zhiyuebin/WinToolBox/releases/latest>，下载 **`UsbBackup-win-x64.zip`**，解压到任意目录（例如 `D:\Tools\UsbBackup\`），双击其中的 `UsbBackup.exe`。
+下载：打开 <https://github.com/zhuyuebin/WinToolBox/releases/latest>，下载 **`UsbBackup-win-x64.zip`**，解压到任意目录（例如 `D:\Tools\UsbBackup\`），双击其中的 `UsbBackup.exe`。
 
 - **免安装**：不写注册表、不注册系统服务，只在自己的用户目录下写配置文件与日志。
 - 首次运行可能被 SmartScreen 拦截（程序未做代码签名）：点「更多信息」→「仍要运行」即可；单文件程序首次启动会自解压到临时目录，属正常现象（见[常见问题](#常见问题)）。

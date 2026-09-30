@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <Authors>朱玥彬</Authors>
-    <RepositoryUrl>https://github.com/zhiyuebin/WinToolBox</RepositoryUrl>
+    <RepositoryUrl>https://github.com/zhuyuebin/WinToolBox</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.2.0</Version>
   </PropertyGroup>

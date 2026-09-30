@@ -14,7 +14,7 @@
 | 源码运行 | Windows 10 / 11（x64）+ .NET 8 SDK |
 | 单文件 exe | Windows 10 / 11（x64），双击 `FolderCreator.exe` 即可；发布包自包含 .NET 运行时，**免安装、无需预装 .NET** |
 
-下载：打开 <https://github.com/zhiyuebin/WinToolBox/releases/latest>，下载 **`FolderCreator-win-x64.zip`**，解压到任意目录后双击其中的 `FolderCreator.exe`。
+下载：打开 <https://github.com/zhuyuebin/WinToolBox/releases/latest>，下载 **`FolderCreator-win-x64.zip`**，解压到任意目录后双击其中的 `FolderCreator.exe`。
 
 ## 快速上手（5 步）
 

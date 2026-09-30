@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4.svg)
-[![Release](https://github.com/zhiyuebin/WinToolBox/actions/workflows/release.yml/badge.svg)](https://github.com/zhiyuebin/WinToolBox/actions/workflows/release.yml)
+[![Release](https://github.com/zhuyuebin/WinToolBox/actions/workflows/release.yml/badge.svg)](https://github.com/zhuyuebin/WinToolBox/actions/workflows/release.yml)
 
 WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具是 `src/Tools/` 下的一个独立程序，
 公共能力沉淀在 `src/WinToolBox.Core` 共享库中，单元测试放在 `tests/` 下。
@@ -26,7 +26,7 @@ WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具�
 
 ### 方式一：直接使用发布包
 
-1. 打开最新发布页：<https://github.com/zhiyuebin/WinToolBox/releases/latest>
+1. 打开最新发布页：<https://github.com/zhuyuebin/WinToolBox/releases/latest>
 2. 下载需要的 zip（每个都是免安装单文件，解压即用）：
    - **`UsbBackup-win-x64.zip`** → 解压后双击 `UsbBackup.exe`
    - **`FolderCreator-win-x64.zip`** → 解压后双击 `FolderCreator.exe`
@@ -39,7 +39,7 @@ WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具�
 ### 方式二：从源码构建
 
 ```powershell
-git clone https://github.com/zhiyuebin/WinToolBox.git
+git clone https://github.com/zhuyuebin/WinToolBox.git
 cd WinToolBox
 
 dotnet build WinToolBox.sln -c Release      # 编译整个解决方案
@@ -114,4 +114,4 @@ WinToolBox/
 
 本项目采用 **MIT License**，详见 [LICENSE](LICENSE)。
 
-作者：**朱玥彬** · 仓库：<https://github.com/zhiyuebin/WinToolBox>
+作者：**朱玥彬** · 仓库：<https://github.com/zhuyuebin/WinToolBox>
