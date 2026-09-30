@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <Authors>朱玥彬</Authors>
+    <RepositoryUrl>https://github.com/zhiyuebin/WinToolBox</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- 全仓库统一编译设置：所有子项目自动继承 -->
+  <PropertyGroup>
+    <Product>WinToolBox</Product>
+    <Company>朱玥彬</Company>
+    <Copyright>Copyright (c) 2026 朱玥彬</Copyright>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 允许在非 Windows 代理机上还原 Windows 目标框架（CI 仍使用 windows-latest） -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Release 产物不生成调试符号，保持发布包干净 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+</Project>

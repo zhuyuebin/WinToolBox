@@ -1,0 +1,89 @@
+namespace WinToolBox.Core;
+
+/// <summary>复制进度快照（每次处理完一个文件回调一次）。</summary>
+public sealed class CopyProgress
+{
+    /// <summary>当前正在处理的文件（相对源目录）。</summary>
+    public string CurrentFile { get; init; } = string.Empty;
+
+    /// <summary>需要处理的文件总数（已排除不参与复制的文件）。</summary>
+    public int TotalFiles { get; init; }
+
+    /// <summary>已处理文件数（复制 + 跳过 + 失败）。</summary>
+    public int ProcessedFiles { get; init; }
+
+    /// <summary>已复制（新增或更新）文件数。</summary>
+    public int CopiedFiles { get; init; }
+
+    /// <summary>已跳过（未修改）文件数。</summary>
+    public int SkippedFiles { get; init; }
+
+    /// <summary>失败文件数。</summary>
+    public int FailedFiles { get; init; }
+
+    /// <summary>已复制字节数。</summary>
+    public long CopiedBytes { get; init; }
+
+    /// <summary>待复制总字节数。</summary>
+    public long TotalBytes { get; init; }
+
+    /// <summary>完成百分比（0-100）。</summary>
+    public double Percent => TotalFiles == 0 ? 100d : Math.Round(ProcessedFiles * 100d / TotalFiles, 1);
+}
+
+/// <summary>单次目录复制的结果汇总。</summary>
+public sealed class CopyResult
+{
+    /// <summary>源目录。</summary>
+    public string SourceDirectory { get; init; } = string.Empty;
+
+    /// <summary>目标目录。</summary>
+    public string TargetDirectory { get; init; } = string.Empty;
+
+    /// <summary>新增或更新的文件数。</summary>
+    public int CopiedFiles { get; set; }
+
+    /// <summary>因为未修改而跳过的文件数。</summary>
+    public int SkippedFiles { get; set; }
+
+    /// <summary>复制失败的文件数。</summary>
+    public int FailedFiles { get; set; }
+
+    /// <summary>新建的目录数。</summary>
+    public int CreatedDirectories { get; set; }
+
+    /// <summary>已复制字节数。</summary>
+    public long CopiedBytes { get; set; }
+
+    /// <summary>是否被取消。</summary>
+    public bool Cancelled { get; set; }
+
+    /// <summary>失败详情（文件路径 + 原因）。</summary>
+    public IList<string> Errors { get; } = new List<string>();
+
+    /// <summary>是否全部成功。</summary>
+    public bool Success => FailedFiles == 0 && !Cancelled;
+
+    /// <summary>人类可读的中文摘要，用于日志与气泡通知。</summary>
+    public string Summary =>
+        $"新增/更新 {CopiedFiles} 个文件，跳过 {SkippedFiles} 个未修改文件" +
+        (FailedFiles > 0 ? $"，失败 {FailedFiles} 个" : string.Empty) +
+        (Cancelled ? "（已取消）" : string.Empty) +
+        $"，共 {FormatSize(CopiedBytes)}。";
+
+    /// <summary>把字节数格式化为易读文本。</summary>
+    public static string FormatSize(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        double value = bytes;
+        var unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes} {units[0]}" : $"{value:0.##} {units[unit]}";
+    }
+}

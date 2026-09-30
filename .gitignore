@@ -1,0 +1,42 @@
+## 构建产物
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+publish/
+artifacts/
+
+## Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+## 本仓库构建期使用的本地 NuGet / dotnet 缓存（不进入版本库）
+.dotnet/
+.nuget/
+
+## 测试与覆盖率
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+*.coverage
+*.trx
+
+## 发布打包
+*.zip
+!docs/**/*.zip
+
+## 操作系统
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+System Volume Information/
+
+## 本地临时文件
+*.tmp
+*.log
