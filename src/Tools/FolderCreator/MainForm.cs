@@ -647,7 +647,9 @@ public partial class MainForm : Form
 
         foreach (var segment in SplitRelativePath(relativePath))
         {
-            path = path.Length == 0 ? segment : path + PathSeparator;
+            // 关键：必须把当前层级名也拼进键。若只拼分隔符，同一父级下的兄弟节点会共用同一个键，
+            // 后加入的节点会复用并覆盖前一个节点的文字与颜色（例如缺失项被多余项覆盖）。
+            path = TreePath.Combine(path, segment);
 
             // 节点 Name 存完整相对路径，保证同一父级下能唯一定位
             var found = current.Nodes.Find(path, searchAllChildren: false);

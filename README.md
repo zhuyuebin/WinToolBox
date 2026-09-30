@@ -95,14 +95,14 @@ WinToolBox/
 - **语言 / 框架**：C# · .NET 8（`net8.0-windows`）· WinForms
 - **测试**：xUnit（`dotnet test`）
 - **依赖**：不引入任何第三方商业 NuGet 包，全部使用 .NET 原生 API
-- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.2.0`）
+- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.2.1`）
 - **持续集成**：[`.github/workflows/release.yml`](.github/workflows/release.yml) —— 推送 `v*` 标签后，
   在 `windows-latest` 上还原依赖、编译 Release、运行 `dotnet test`、分别发布 UsbBackup 与 FolderCreator 的
   单文件 exe、打包为 `UsbBackup-win-x64.zip` 与 `FolderCreator-win-x64.zip`，并创建 GitHub Release：
 
   ```powershell
-  git tag v0.2.0
-  git push origin v0.2.0
+  git tag v0.2.1
+  git push origin v0.2.1
   ```
 
 > 云端 CI 没有物理 U 盘，`UsbDetector` / `WM_DEVICECHANGE` 的运行期行为不在 CI 中验证（但必须编译通过）；
