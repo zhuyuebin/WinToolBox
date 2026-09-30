@@ -2,7 +2,7 @@
 
 ## 1. 项目基本信息
 - 所属仓库：WinToolBox
-- 当前仓库地址：https://github.com/zhiyuebin/WinToolBox
+- 当前仓库地址：https://github.com/zhuyuebin/WinToolBox
 - 新增工具名称：FolderCreator
 - 工具定位：批量创建文件夹结构，并支持检查现有目录是否符合规则。
 - 技术栈：C# (.NET 8) + WinForms
