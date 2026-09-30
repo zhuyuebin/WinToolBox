@@ -166,7 +166,7 @@ public sealed class BackupService
         var targetRoot = (config.BackupTargetDirectory ?? string.Empty).Trim();
         if (targetRoot.Length == 0)
         {
-            const string notConfigured = "尚未配置备份目标目录，请右键托盘图标选择“设置”。";
+            const string notConfigured = "尚未配置备份目标目录：请在主界面选择目录后点「保存设置」再备份。";
             _logger.Warn(notConfigured);
             Notify("备份未执行", notConfigured);
             return BackupOutcome.Fail(notConfigured);

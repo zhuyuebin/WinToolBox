@@ -26,8 +26,7 @@ public sealed class ConfigManagerTests
 
         var config = manager.Load();
 
-        // 默认配置：自动备份开启、目标目录为空、使用默认排除后缀
-        Assert.True(config.AutoBackupEnabled);
+        // 默认配置：目标目录为空、使用默认排除后缀
         Assert.Equal(string.Empty, config.BackupTargetDirectory);
         Assert.Equal(3, config.ExcludedExtensions.Count);
         Assert.Contains(".tmp", config.ExcludedExtensions);
@@ -48,8 +47,8 @@ public sealed class ConfigManagerTests
 
         Assert.True(ok);
         Assert.Null(error);
-        Assert.True(config.AutoBackupEnabled);
         Assert.Empty(config.BackupTargetDirectory);
+        Assert.Equal(BackupConfig.CreateDefaultExtensions().Count, config.ExcludedExtensions.Count);
     }
 
     [Fact]
@@ -95,7 +94,6 @@ public sealed class ConfigManagerTests
         var config = new BackupConfig
         {
             BackupTargetDirectory = chineseTarget,
-            AutoBackupEnabled = false,
             ExcludedExtensions = new List<string> { ".tmp", ".bak", ".log" }
         };
 
@@ -105,7 +103,6 @@ public sealed class ConfigManagerTests
         var loaded = manager.Load();
 
         Assert.Equal(chineseTarget, loaded.BackupTargetDirectory);
-        Assert.False(loaded.AutoBackupEnabled);
         Assert.Equal(3, loaded.ExcludedExtensions.Count);
         Assert.Contains(".bak", loaded.ExcludedExtensions);
         Assert.Contains(".log", loaded.ExcludedExtensions);
@@ -135,13 +132,23 @@ public sealed class ConfigManagerTests
         var configPath = ConfigPath(ws);
         var manager = new ConfigManager(configPath);
 
-        manager.Save(new BackupConfig { BackupTargetDirectory = Path.Combine(ws.Root, "first"), AutoBackupEnabled = true });
-        manager.Save(new BackupConfig { BackupTargetDirectory = Path.Combine(ws.Root, "second"), AutoBackupEnabled = false });
+        manager.Save(new BackupConfig
+        {
+            BackupTargetDirectory = Path.Combine(ws.Root, "first"),
+            ExcludedExtensions = new List<string> { ".old" }
+        });
+        manager.Save(new BackupConfig
+        {
+            BackupTargetDirectory = Path.Combine(ws.Root, "second"),
+            ExcludedExtensions = new List<string> { ".new" }
+        });
 
         var loaded = manager.Load();
 
+        // 第二次保存必须整体覆盖第一次的内容
         Assert.Equal(Path.Combine(ws.Root, "second"), loaded.BackupTargetDirectory);
-        Assert.False(loaded.AutoBackupEnabled);
+        Assert.Contains(".new", loaded.ExcludedExtensions);
+        Assert.DoesNotContain(".old", loaded.ExcludedExtensions);
         Assert.False(File.Exists(configPath + ".tmp"));
     }
 
@@ -185,8 +192,9 @@ public sealed class ConfigManagerTests
 
         var loaded = manager.Load();
 
-        Assert.True(loaded.AutoBackupEnabled);
+        // 损坏文件降级为默认配置
         Assert.Equal(string.Empty, loaded.BackupTargetDirectory);
+        Assert.Equal(3, loaded.ExcludedExtensions.Count);
 
         // 损坏文件不能被自动覆盖，便于用户手工修复
         Assert.True(File.Exists(configPath));
@@ -210,7 +218,8 @@ public sealed class ConfigManagerTests
 
         // 失败时仍然给出默认配置，避免调用方拿到 null
         Assert.NotNull(config);
-        Assert.True(config.AutoBackupEnabled);
+        Assert.Equal(string.Empty, config.BackupTargetDirectory);
+        Assert.Equal(3, config.ExcludedExtensions.Count);
     }
 
     [Fact]
@@ -227,8 +236,8 @@ public sealed class ConfigManagerTests
         Assert.False(ok);
         Assert.NotNull(error);
         Assert.Equal("配置文件内容为空", error);
-        Assert.True(config.AutoBackupEnabled);
         Assert.Equal(string.Empty, config.BackupTargetDirectory);
+        Assert.Equal(3, config.ExcludedExtensions.Count);
     }
 
     [Fact]
@@ -255,8 +264,8 @@ public sealed class ConfigManagerTests
 
         Assert.False(ok);
         Assert.NotNull(error);
-        Assert.True(config.AutoBackupEnabled);
         Assert.Equal(string.Empty, config.BackupTargetDirectory);
+        Assert.Equal(3, config.ExcludedExtensions.Count);
     }
 
     [Fact]
@@ -264,13 +273,13 @@ public sealed class ConfigManagerTests
     {
         using var ws = new TempWorkspace();
         var configPath = ConfigPath(ws);
-        ws.CreateFile(configPath, "{ \"autoBackupEnabled\": false }", null, ws.Root);
+        ws.CreateFile(configPath, "{ \"excludedExtensions\": [\".bak\"] }", null, ws.Root);
 
         var loaded = new ConfigManager(configPath).Load();
 
-        Assert.False(loaded.AutoBackupEnabled);
+        // 只给出后缀列表：缺失的字段（目标目录）回落到默认值
         Assert.Equal(string.Empty, loaded.BackupTargetDirectory);
-        Assert.Equal(3, loaded.ExcludedExtensions.Count);
+        Assert.Equal(new[] { ".bak" }, loaded.ExcludedExtensions);
     }
 
     [Fact]
@@ -296,8 +305,8 @@ public sealed class ConfigManagerTests
 
         var json = "{\n" +
                    "  // 用户手工编辑时允许注释\n" +
-                   "  \"BackupTargetDirectory\": \"" + target.Replace("\\", "\\\\") + "\",\n" +
-                   "  \"AUTOBACKUPENABLED\": true,\n" +
+                   "  \"BACKUPTARGETDIRECTORY\": \"" + target.Replace("\\", "\\\\") + "\",\n" +
+                   "  \"EXCLUDEDEXTENSIONS\": [\".bak\"],\n" +
                    "}";
         ws.CreateFile(configPath, json, null, ws.Root);
 
@@ -306,6 +315,7 @@ public sealed class ConfigManagerTests
         Assert.True(ok);
         Assert.Null(error);
         Assert.Equal(target, config.BackupTargetDirectory);
+        Assert.Equal(new[] { ".bak" }, config.ExcludedExtensions);
     }
 
     // ------------------------------------------------------------------
@@ -398,7 +408,7 @@ public sealed class ConfigManagerTests
         manager.Save(new BackupConfig
         {
             BackupTargetDirectory = Path.Combine(ws.Root, "target"),
-            AutoBackupEnabled = false
+            ExcludedExtensions = new List<string> { ".bak" }
         });
 
         Assert.True(manager.Exists);
@@ -409,8 +419,8 @@ public sealed class ConfigManagerTests
         Assert.False(File.Exists(configPath));
 
         var reloaded = manager.Load();
-        Assert.True(reloaded.AutoBackupEnabled);
         Assert.Equal(string.Empty, reloaded.BackupTargetDirectory);
+        Assert.Equal(BackupConfig.CreateDefaultExtensions().Count, reloaded.ExcludedExtensions.Count);
     }
 
     [Fact]
@@ -449,22 +459,20 @@ public sealed class ConfigManagerTests
     {
         var original = new BackupConfig
         {
-            BackupTargetDirectory = @"D:\UsbBackup",
-            AutoBackupEnabled = false
+            BackupTargetDirectory = @"D:\UsbBackup"
         };
 
         var clone = original.Clone();
 
         Assert.Equal(original.BackupTargetDirectory, clone.BackupTargetDirectory);
-        Assert.False(clone.AutoBackupEnabled);
+        Assert.Equal(original.ExcludedExtensions, clone.ExcludedExtensions);
 
         // 修改副本不能影响原对象（尤其是 List 必须深拷贝）
         clone.BackupTargetDirectory = @"E:\Other";
         clone.ExcludedExtensions.Add(".zzz");
-        clone.AutoBackupEnabled = true;
 
         Assert.Equal(@"D:\UsbBackup", original.BackupTargetDirectory);
-        Assert.False(original.AutoBackupEnabled);
+        Assert.NotEqual(clone.BackupTargetDirectory, original.BackupTargetDirectory);
         Assert.DoesNotContain(".zzz", original.ExcludedExtensions);
     }
 
@@ -487,7 +495,6 @@ public sealed class ConfigManagerTests
         var config = BackupConfig.CreateDefault();
 
         Assert.Equal(string.Empty, config.BackupTargetDirectory);
-        Assert.True(config.AutoBackupEnabled);
-        Assert.Equal(3, config.ExcludedExtensions.Count);
+        Assert.Equal(BackupConfig.CreateDefaultExtensions(), config.ExcludedExtensions);
     }
 }

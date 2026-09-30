@@ -11,10 +11,6 @@ public sealed class BackupConfig
     [JsonPropertyName("backupTargetDirectory")]
     public string BackupTargetDirectory { get; set; } = string.Empty;
 
-    /// <summary>是否在检测到 U 盘插入时自动备份。</summary>
-    [JsonPropertyName("autoBackupEnabled")]
-    public bool AutoBackupEnabled { get; set; } = true;
-
     /// <summary>排除的文件后缀（不区分大小写，例如 .tmp）。</summary>
     [JsonPropertyName("excludedExtensions")]
     public List<string> ExcludedExtensions { get; set; } = CreateDefaultExtensions();
@@ -22,14 +18,13 @@ public sealed class BackupConfig
     /// <summary>默认排除的文件后缀。</summary>
     public static List<string> CreateDefaultExtensions() => new() { ".tmp", ".part", ".crdownload" };
 
-    /// <summary>默认配置（自动备份开启、目标目录为空、使用默认排除后缀）。</summary>
+    /// <summary>默认配置（目标目录为空、使用默认排除后缀）。备份只由用户手动触发。</summary>
     public static BackupConfig CreateDefault() => new();
 
     /// <summary>深拷贝，避免调用方意外修改缓存实例。</summary>
     public BackupConfig Clone() => new()
     {
         BackupTargetDirectory = BackupTargetDirectory,
-        AutoBackupEnabled = AutoBackupEnabled,
         ExcludedExtensions = new List<string>(ExcludedExtensions ?? new List<string>())
     };
 

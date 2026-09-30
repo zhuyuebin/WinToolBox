@@ -17,6 +17,34 @@ public enum LogLevel
 }
 
 /// <summary>
+/// 一条日志记录。界面可以订阅 <see cref="Logger.EntryWritten"/> 实时显示。
+/// </summary>
+public sealed class LogEntry
+{
+    /// <summary>发生时间。</summary>
+    public DateTime Timestamp { get; init; }
+
+    /// <summary>级别。</summary>
+    public LogLevel Level { get; init; }
+
+    /// <summary>消息正文。</summary>
+    public string Message { get; init; } = string.Empty;
+
+    /// <summary>关联异常（可空）。</summary>
+    public Exception? Exception { get; init; }
+
+    /// <summary>与写入日志文件完全一致的格式化文本（含异常堆栈，便于界面直接显示）。</summary>
+    public string FormattedText
+    {
+        get
+        {
+            var head = $"{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Logger.FormatLevel(Level)}] {Message}";
+            return Exception is null ? head : head + Environment.NewLine + Exception;
+        }
+    }
+}
+
+/// <summary>
 /// 日志记录器：写入 %LocalAppData%\WinToolBox\logs\，按天切割（每天一个文件）。
 /// 线程安全；任何写入失败都不会抛给调用方（日志不能拖垮主程序）。
 /// </summary>
@@ -62,6 +90,11 @@ public sealed class Logger
     /// <summary>最近一次写入失败的原因（正常时为 null）。</summary>
     public Exception? LastError { get; private set; }
 
+    /// <summary>
+    /// 每写入一条日志都会触发（可能在后台线程触发，界面订阅时需自行切回 UI 线程）。
+    /// </summary>
+    public event EventHandler<LogEntry>? EntryWritten;
+
     /// <summary>按天切割的文件名。</summary>
     public static string BuildFileName(DateTime date) => $"{FileNamePrefix}{date:yyyyMMdd}.log";
 
@@ -77,24 +110,27 @@ public sealed class Logger
     /// <summary>写入一条日志。</summary>
     public void Write(LogLevel level, string message, Exception? exception = null)
     {
+        var timestamp = DateTime.Now;
+        var text = message ?? string.Empty;
+
         var line = new StringBuilder()
-            .Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"))
+            .Append(timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"))
             .Append(" [").Append(FormatLevel(level)).Append("] ")
-            .Append(message ?? string.Empty);
+            .Append(text);
 
         if (exception is not null)
         {
             line.AppendLine().Append(exception);
         }
 
-        var text = line.ToString();
+        var fileText = line.ToString();
 
         lock (_sync)
         {
             try
             {
                 AppPaths.EnsureDirectory(LogDirectory);
-                File.AppendAllText(CurrentLogFilePath, text + Environment.NewLine, new UTF8Encoding(false));
+                File.AppendAllText(CurrentLogFilePath, fileText + Environment.NewLine, new UTF8Encoding(false));
                 LastError = null;
             }
             catch (Exception ex)
@@ -102,6 +138,22 @@ public sealed class Logger
                 // 日志失败不能再抛异常，否则会掩盖真实业务错误
                 LastError = ex;
             }
+        }
+
+        // 事件在锁外触发：订阅者（界面）里做任何事都不会卡住日志写入
+        try
+        {
+            EntryWritten?.Invoke(this, new LogEntry
+            {
+                Timestamp = timestamp,
+                Level = level,
+                Message = text,
+                Exception = exception
+            });
+        }
+        catch
+        {
+            // 订阅者抛异常不能影响日志本身
         }
     }
 
@@ -168,7 +220,8 @@ public sealed class Logger
         }
     }
 
-    private static string FormatLevel(LogLevel level) => level switch
+    /// <summary>日志级别对应的短标签（与文件格式一致）。</summary>
+    internal static string FormatLevel(LogLevel level) => level switch
     {
         LogLevel.Info => "INFO ",
         LogLevel.Warn => "WARN ",

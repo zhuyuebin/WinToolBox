@@ -30,6 +30,9 @@ public sealed class TrayApplicationContext : ApplicationContext
     private bool _backupRequestRunning;
     private bool _disposed;
 
+    /// <summary>主界面窗口（普通用户的主要入口；关闭窗口时只隐藏，不退出程序）。</summary>
+    private MainForm? _mainForm;
+
     /// <summary>创建托盘程序上下文。</summary>
     public TrayApplicationContext()
     {
@@ -57,15 +60,15 @@ public sealed class TrayApplicationContext : ApplicationContext
         _backupMenuItem.Click += OnBackupNowClick;
 
         _contextMenu = new ContextMenuStrip();
-        _contextMenu.Items.Add(CreateMenuItem("设置", OnSettingsClick));
+        _contextMenu.Items.Add(CreateMenuItem("打开主界面", OnOpenMainClick));
         _contextMenu.Items.Add(_backupMenuItem);
         _contextMenu.Items.Add(CreateMenuItem("打开日志", OnOpenLogClick));
         _contextMenu.Items.Add(new ToolStripSeparator());
         _contextMenu.Items.Add(CreateMenuItem("退出", OnExitClick));
 
         _notifyIcon.ContextMenuStrip = _contextMenu;
-        _notifyIcon.DoubleClick += OnBackupNowClick;
-        _notifyIcon.BalloonTipClicked += OnBalloonTipClicked;
+        _notifyIcon.DoubleClick += OnOpenMainClick;
+        _notifyIcon.BalloonTipClicked += OnOpenMainClick;
 
         _usbWatcher = new UsbWatcher(_detector, _logger);
         _usbWatcher.DeviceArrived += OnDeviceArrived;
@@ -74,23 +77,46 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _logger.CleanupOldLogs();
         _logger.Info("UsbBackup 托盘图标已就绪，等待 U 盘插拔。");
+
+        // 主界面：普通用户启动后直接看到窗口；托盘图标作为常驻入口与后台运行方式
+        try
+        {
+            _mainForm = new MainForm(_configManager, _logger, _backupService, _detector, _notifier);
+            _mainForm.ExitRequested += (_, _) => ExitApplication();
+            ShowMainWindow();
+            _logger.Info("主界面已打开。");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("创建主界面失败，将只以托盘方式运行。", ex);
+            ShowErrorMessage("主界面打开失败，程序将继续在通知区域运行：" + ex.Message);
+        }
     }
 
-    /// <summary>U 盘插入：写日志，并在开启自动备份时后台备份该设备。</summary>
+    /// <summary>显示并激活主界面（托盘双击/菜单、「打开主界面」、气泡点击都走这里）。</summary>
+    private void ShowMainWindow()
+    {
+        try
+        {
+            _mainForm?.ShowAndActivate();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("打开主界面失败。", ex);
+        }
+    }
+
+    /// <summary>U 盘插入：只写日志并提示用户可以手动备份（本工具不做自动备份）。</summary>
     private void OnDeviceArrived(object? sender, UsbDeviceInfo device)
     {
         try
         {
             _logger.Info($"U 盘已插入：{device}");
+            _logger.Info("本工具不会自动备份，请在主界面点「立即备份」或右键托盘图标 →「立即备份」。");
 
-            var config = _configManager.Load();
-            if (!config.AutoBackupEnabled)
-            {
-                _logger.Info($"自动备份已关闭，忽略本次插入：{device.DriveLetter}");
-                return;
-            }
+            ShowBalloon("检测到 U 盘", $"{device.DriveLetter} 已插入。点击「立即备份」开始备份，或双击托盘图标打开主界面。");
 
-            StartBackupTask($"检测到 U 盘 {device.DriveLetter} 插入，正在后台备份…");
+            PostToUi(() => _mainForm?.SetStatus($"检测到 U 盘 {device.DriveLetter}，可点击「立即备份」。"));
         }
         catch (Exception ex)
         {
@@ -114,19 +140,8 @@ public sealed class TrayApplicationContext : ApplicationContext
     private void OnBackupNowClick(object? sender, EventArgs e)
         => StartBackupTask("正在后台备份所有已插入的 U 盘…");
 
-    private void OnSettingsClick(object? sender, EventArgs e)
-    {
-        try
-        {
-            using var form = new SettingsForm(_configManager, _notifier, _logger);
-            form.ShowDialog();
-        }
-        catch (Exception ex)
-        {
-            _logger.Error("打开设置窗口失败。", ex);
-            ShowErrorMessage("打开设置窗口失败：" + ex.Message);
-        }
-    }
+    /// <summary>托盘菜单「打开主界面」：显示主窗口（设置、立即备份、运行日志都在里面）。</summary>
+    private void OnOpenMainClick(object? sender, EventArgs e) => ShowMainWindow();
 
     /// <summary>用资源管理器打开日志目录；目录不存在先创建，失败时退化为提示框。</summary>
     private void OnOpenLogClick(object? sender, EventArgs e)
@@ -158,19 +173,6 @@ public sealed class TrayApplicationContext : ApplicationContext
             ShowErrorMessage(latest is null
                 ? $"打开日志目录失败：{ex.Message}{Environment.NewLine}日志目录：{_logger.LogDirectory}"
                 : $"打开日志目录失败：{ex.Message}{Environment.NewLine}当前日志文件：{latest}");
-        }
-    }
-
-    private void OnBalloonTipClicked(object? sender, EventArgs e)
-    {
-        try
-        {
-            // 气泡被点击时打开日志目录，方便用户立刻查看本次备份结果
-            OnOpenLogClick(sender, EventArgs.Empty);
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn("处理托盘气泡点击失败。", ex);
         }
     }
 
@@ -334,9 +336,24 @@ public sealed class TrayApplicationContext : ApplicationContext
         return item;
     }
 
-    /// <summary>退出程序：隐藏并释放托盘图标、停止监听、结束消息循环。</summary>
+    /// <summary>退出程序：先关闭主界面，再隐藏并释放托盘图标、停止监听、结束消息循环。</summary>
     private void ExitApplication()
     {
+        try
+        {
+            if (_mainForm is not null)
+            {
+                _mainForm.PrepareForExit();
+                _mainForm.Close();
+                _mainForm.Dispose();
+                _mainForm = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("关闭主界面失败。", ex);
+        }
+
         try
         {
             _notifyIcon.Visible = false;
@@ -365,6 +382,20 @@ public sealed class TrayApplicationContext : ApplicationContext
         if (disposing && !_disposed)
         {
             _disposed = true;
+
+            try
+            {
+                if (_mainForm is not null)
+                {
+                    _mainForm.PrepareForExit();
+                    _mainForm.Dispose();
+                    _mainForm = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("释放主界面失败。", ex);
+            }
 
             try
             {

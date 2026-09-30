@@ -49,6 +49,38 @@ internal static class Program
         return RunTrayApplication(logger);
     }
 
+    /// <summary>
+    /// 受限上下文（低完整性）下，系统会静默拒绝托盘图标注册，用户只会看到“进程在运行但托盘里没有图标”。
+    /// 这里提前把原因和解决办法讲清楚，避免被误判成程序没启动。
+    /// </summary>
+    private static void WarnIfRestrictedContext(Logger logger)
+    {
+        if (!ProcessIntegrity.IsRestricted(out var integrity))
+        {
+            return;
+        }
+
+        logger.Warn($"检测到受限运行上下文（{integrity}），托盘图标可能无法显示。");
+
+        try
+        {
+            MessageBox.Show(
+                "检测到本程序运行在受限/沙箱环境中（完整性级别：" + integrity + "）。\n\n" +
+                "Windows 会拒绝受限进程注册托盘图标，因此你很可能看不到托盘图标（但进程确实在运行）。\n\n" +
+                "请改用下面任一方式启动：\n" +
+                "  1) 在 Windows 资源管理器里双击 UsbBackup.exe；\n" +
+                "  2) 在你自己的 Windows 终端（不是沙箱/受限终端）里运行。\n\n" +
+                "如果之前已经在受限终端里启动过，请先在任务管理器中结束所有 UsbBackup.exe，再重新启动。",
+                "WinToolBox - U盘备份",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            logger.Warn("显示受限环境提示失败。", ex);
+        }
+    }
+
     /// <summary>启动托盘程序（单实例保护 + 全局异常兜底）。</summary>
     private static int RunTrayApplication(Logger logger)
     {
@@ -57,7 +89,9 @@ internal static class Program
         {
             logger.Warn("检测到已有 UsbBackup 实例在运行，本次启动已取消。");
             MessageBox.Show(
-                "WinToolBox U盘备份 已经在运行，请查看系统托盘图标。",
+                "WinToolBox U盘备份 已经在运行，请查看通知区域（任务栏右下角，图标可能收在 “^” 折叠区里）。\n\n" +
+                "如果通知区域里也找不到图标，说明之前那个实例没能注册托盘图标（例如是在沙箱/受限终端里启动的）。\n" +
+                "请在任务管理器中结束所有 UsbBackup.exe，然后改用“在资源管理器里双击 UsbBackup.exe”重新启动。",
                 "WinToolBox - U盘备份",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -65,6 +99,8 @@ internal static class Program
         }
 
         AttachGlobalExceptionHandlers(logger);
+
+        WarnIfRestrictedContext(logger);
 
         logger.Info("UsbBackup 托盘程序启动。");
 
@@ -259,7 +295,6 @@ internal static class Program
             var configManager = new ConfigManager(configFile, logger);
             var config = BackupConfig.CreateDefault();
             config.BackupTargetDirectory = backupRoot;
-            config.AutoBackupEnabled = false;
             config.ExcludedExtensions.Add(".bak");
             config.ExcludedExtensions.Add("TEMP");
             configManager.Save(config);
@@ -267,7 +302,6 @@ internal static class Program
             var loaded = configManager.Load();
             Check(report, ref pass, ref fail, "配置已写入磁盘", File.Exists(configFile), "配置文件不存在");
             Check(report, ref pass, ref fail, "配置往返：目标目录一致", string.Equals(loaded.BackupTargetDirectory, backupRoot, StringComparison.OrdinalIgnoreCase), $"实际 {loaded.BackupTargetDirectory}");
-            Check(report, ref pass, ref fail, "配置往返：自动备份开关一致", !loaded.AutoBackupEnabled, $"实际 {loaded.AutoBackupEnabled}");
             Check(report, ref pass, ref fail, "配置往返：自定义后缀已保留", loaded.ExcludedExtensions.Contains(".bak"), "缺少 .bak");
             Check(report, ref pass, ref fail, "配置往返：后缀已规范化为小写", loaded.ExcludedExtensions.Contains(".temp"), "缺少 .temp");
 
