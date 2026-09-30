@@ -27,8 +27,10 @@ WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具�
 ### 方式一：直接使用发布包
 
 1. 打开最新发布页：<https://github.com/zhiyuebin/WinToolBox/releases/latest>
-2. 下载 **`UsbBackup-win-x64.zip`**，解压到任意目录
-3. 双击 **`UsbBackup.exe`** → 在主界面选择备份目录并保存 → 插上 U 盘 → 点「立即备份」
+2. 下载需要的 zip（每个都是免安装单文件，解压即用）：
+   - **`UsbBackup-win-x64.zip`** → 解压后双击 `UsbBackup.exe`
+   - **`FolderCreator-win-x64.zip`** → 解压后双击 `FolderCreator.exe`
+3. 以 UsbBackup 为例：在主界面选择备份目录并保存 → 插上 U 盘 → 点「立即备份」
 
 > 程序未做代码签名，首次运行可能被 Windows SmartScreen 拦截（“Windows 已保护你的电脑”）：
 > 点「更多信息」→「仍要运行」即可。若**每次都**提示，见
@@ -93,14 +95,14 @@ WinToolBox/
 - **语言 / 框架**：C# · .NET 8（`net8.0-windows`）· WinForms
 - **测试**：xUnit（`dotnet test`）
 - **依赖**：不引入任何第三方商业 NuGet 包，全部使用 .NET 原生 API
-- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.1.0`）
+- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.2.0`）
 - **持续集成**：[`.github/workflows/release.yml`](.github/workflows/release.yml) —— 推送 `v*` 标签后，
-  在 `windows-latest` 上还原依赖、编译 Release、运行 `dotnet test`、发布单文件 `UsbBackup.exe`、
-  打包为 `UsbBackup-win-x64.zip`，并创建 GitHub Release：
+  在 `windows-latest` 上还原依赖、编译 Release、运行 `dotnet test`、分别发布 UsbBackup 与 FolderCreator 的
+  单文件 exe、打包为 `UsbBackup-win-x64.zip` 与 `FolderCreator-win-x64.zip`，并创建 GitHub Release：
 
   ```powershell
-  git tag v0.1.0
-  git push origin v0.1.0
+  git tag v0.2.0
+  git push origin v0.2.0
   ```
 
 > 云端 CI 没有物理 U 盘，`UsbDetector` / `WM_DEVICECHANGE` 的运行期行为不在 CI 中验证（但必须编译通过）；

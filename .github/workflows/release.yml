@@ -1,6 +1,6 @@
 name: Release
 
-# 触发方式：只有推送 v* 标签（例如 v0.1.0）才会执行本工作流。
+# 触发方式：只有推送 v* 标签（例如 v0.2.0）才会执行本工作流。
 # 不使用 workflow_dispatch —— 本工作流的所有步骤都依赖标签 ref，避免手动触发时误发 Release。
 on:
   push:
@@ -18,7 +18,7 @@ env:
 
 jobs:
   release:
-    name: 测试、构建并发布 UsbBackup (win-x64)
+    name: 测试、构建并发布 UsbBackup / FolderCreator (win-x64)
     runs-on: windows-latest
 
     steps:
@@ -58,33 +58,52 @@ jobs:
             -r win-x64 `
             --self-contained true `
             -p:PublishSingleFile=true `
-            -o publish
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败，退出码 $LASTEXITCODE" }
+            -o publish/UsbBackup
+          if ($LASTEXITCODE -ne 0) { throw "UsbBackup 发布失败，退出码 $LASTEXITCODE" }
+
+          dotnet publish src/Tools/FolderCreator/FolderCreator.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -o publish/FolderCreator
+          if ($LASTEXITCODE -ne 0) { throw "FolderCreator 发布失败，退出码 $LASTEXITCODE" }
 
       # 产物存在性校验：避免构建异常时静默发布一个空包。
       - name: 校验产物存在
         shell: pwsh
         run: |
-          if (-not (Test-Path -Path 'publish/UsbBackup.exe' -PathType Leaf)) {
-            throw "发布失败：未找到 publish/UsbBackup.exe"
+          $expected = @('publish/UsbBackup/UsbBackup.exe', 'publish/FolderCreator/FolderCreator.exe')
+          foreach ($exe in $expected) {
+            if (-not (Test-Path -Path $exe -PathType Leaf)) {
+              throw "发布失败：未找到 $exe"
+            }
           }
           Write-Host '发布目录内容：'
-          Get-ChildItem -Path 'publish' | Format-Table Name, Length
+          Get-ChildItem -Path 'publish' -Recurse -File | Format-Table FullName, Length
 
-      - name: 打包为 UsbBackup-win-x64.zip
+      - name: 打包为两个 zip
         shell: pwsh
         run: |
-          $zip = 'UsbBackup-win-x64.zip'
-          if (Test-Path -Path $zip) { Remove-Item -Path $zip -Force }
-          Compress-Archive -Path 'publish/*' -DestinationPath $zip -CompressionLevel Optimal
-          if (-not (Test-Path -Path $zip -PathType Leaf)) {
-            throw "打包失败：未生成 $zip"
+          $targets = @(
+            @{ Name = 'UsbBackup-win-x64.zip';     Source = 'publish/UsbBackup/*' },
+            @{ Name = 'FolderCreator-win-x64.zip'; Source = 'publish/FolderCreator/*' }
+          )
+
+          foreach ($t in $targets) {
+            if (Test-Path -Path $t.Name) { Remove-Item -Path $t.Name -Force }
+            Compress-Archive -Path $t.Source -DestinationPath $t.Name -CompressionLevel Optimal
+            if (-not (Test-Path -Path $t.Name -PathType Leaf)) {
+              throw "打包失败：未生成 $($t.Name)"
+            }
+            Write-Host ("{0}：{1:N2} MB" -f $t.Name, ((Get-Item $t.Name).Length / 1MB))
           }
-          Write-Host ("压缩包大小：{0:N2} MB" -f ((Get-Item $zip).Length / 1MB))
 
       - name: 创建 GitHub Release 并上传 zip
         uses: softprops/action-gh-release@v2
         with:
-          name: UsbBackup ${{ github.ref_name }}
-          files: UsbBackup-win-x64.zip
+          name: WinToolBox ${{ github.ref_name }}
+          files: |
+            UsbBackup-win-x64.zip
+            FolderCreator-win-x64.zip
           generate_release_notes: true

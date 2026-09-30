@@ -8,7 +8,7 @@
 | --- | --- |
 | 程序名 | `UsbBackup.exe`（WinForms 窗口程序 + 常驻托盘图标，C# / .NET 8） |
 | 项目位置 | `src/Tools/UsbBackup/`（输出 `UsbBackup.exe`） |
-| 版本 | `0.1.0`，统一由仓库根 [`Directory.Build.props`](../../../Directory.Build.props) 控制 |
+| 版本 | `0.2.0`，统一由仓库根 [`Directory.Build.props`](../../../Directory.Build.props) 控制 |
 | 共享库 | 引用 `src/WinToolBox.Core`，复用其中的 `Logger` / `ConfigManager` / `FileCopier` / `UsbDetector` / `Notifier` |
 
 ## 运行要求与获取方式
@@ -144,7 +144,7 @@
 ## 命令行参数
 
 ```powershell
-# 查看版本：输出形如 “WinToolBox - U盘备份 UsbBackup 0.1.0”
+# 查看版本：输出形如 “WinToolBox - U盘备份 UsbBackup 0.2.0”
 UsbBackup.exe --version
 
 # 本机冒烟自检：在临时目录里跑一遍「首次复制 → 增量跳过 → 增量更新 → 排除规则 → 配置读写 → U 盘枚举」，

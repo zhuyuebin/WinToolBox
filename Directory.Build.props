@@ -3,7 +3,7 @@
     <Authors>朱玥彬</Authors>
     <RepositoryUrl>https://github.com/zhiyuebin/WinToolBox</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <!-- 全仓库统一编译设置：所有子项目自动继承 -->
