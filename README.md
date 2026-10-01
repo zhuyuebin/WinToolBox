@@ -74,10 +74,13 @@ WinToolBox/
 │  └─ FolderCreator.Tests/         # FolderCreator 单元测试（xUnit）
 ├─ Directory.Build.props           # 统一版本号与包元数据
 ├─ WinToolBox.sln
-└─ README.md
+├─ README.md                       # 仓库总览（中文）
+└─ README_EN.md                    # 仓库总览（英文）
 ```
 
 每个工具目录下都有自己的 `README.md`，包含完整的使用说明与常见问题。
+
+所有文档均为中英双语：中文为 `X.md`，英文为同目录下的 `X_EN.md`（每份文档顶部可一键切换语言）。
 
 ---
 

@@ -75,10 +75,13 @@ WinToolBox/
 │  └─ FolderCreator.Tests/         # FolderCreator unit tests (xUnit)
 ├─ Directory.Build.props           # single source of truth for version and package metadata
 ├─ WinToolBox.sln
-└─ README.md
+├─ README.md                       # repository overview (Chinese)
+└─ README_EN.md                    # repository overview (English)
 ```
 
 Every tool folder contains its own `README.md` with full usage instructions and troubleshooting.
+
+All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` beside it (each document has a language switcher at the top).
 
 ---
 
