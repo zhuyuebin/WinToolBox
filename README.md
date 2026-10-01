@@ -115,3 +115,5 @@ WinToolBox/
 本项目采用 **MIT License**，详见 [LICENSE](LICENSE)。
 
 作者：**朱玥彬** · 仓库：<https://github.com/zhuyuebin/WinToolBox>
+
+This project uses free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
