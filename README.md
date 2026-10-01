@@ -1,5 +1,7 @@
 # WinToolBox
 
+[English](README_EN.md) | [简体中文](README.md)
+
 > Windows 小工具集合 · Monorepo 单仓库多项目
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
