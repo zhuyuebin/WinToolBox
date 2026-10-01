@@ -17,7 +17,7 @@ WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具�
 | 工具 | 类型 | 说明 | 文档 |
 | --- | --- | --- | --- |
 | **UsbBackup** | WinForms 桌面 + 托盘常驻 | U 盘备份工具（**手动触发**）：按“卷标 + 卷序列号 + 日期”把 U 盘增量备份到指定目录；主界面可视化管理备份路径与运行日志 | **[使用说明](src/Tools/UsbBackup/README.md)** |
-| **FolderCreator** | WinForms 桌面 | 批量创建文件夹结构，并检查现有目录是否符合规则（严格 / 宽松两种模式） | **[使用说明](src/Tools/FolderCreator/README.md)** |
+| **FolderCreator** | WinForms 桌面 | 批量创建文件夹结构，并检查现有目录是否符合规则（严格 / 宽松两种模式）；支持规则模板、从现有目录反向生成规则、占位文件、多根目录批量创建、检查报告与目录树导出 | **[使用说明](src/Tools/FolderCreator/README.md)** |
 | **WinToolBox.Core** | 类库 | 共享基础能力：配置读写、日志、托盘通知、增量复制引擎、U 盘识别、备份业务规则 | **[类库说明](src/WinToolBox.Core/README.md)** |
 
 > 运行环境：Windows 10 / 11（x64）。发布包为**自包含单文件**，目标机器**无需预装 .NET**。
@@ -89,9 +89,10 @@ WinToolBox/
 | 文档 | 内容 |
 | --- | --- |
 | [UsbBackup 使用说明](src/Tools/UsbBackup/README.md) | 主界面与托盘用法、备份规则、配置与日志路径、命令行参数、常见问题 |
-| [FolderCreator 使用说明](src/Tools/FolderCreator/README.md) | 规则语法、父级自动补齐、严格/宽松检查模式、命令行参数 |
+| [FolderCreator 使用说明](src/Tools/FolderCreator/README.md) | 规则语法、父级自动补齐、严格/宽松检查模式、六项增强功能（模板 / 反向生成 / 占位文件 / 多根目录 / 检查报告 / 目录树）、命令行参数 |
 | [WinToolBox.Core 类库说明](src/WinToolBox.Core/README.md) | 共享库的类型清单、典型用法与设计约定 |
 | [本地手动测试清单](MD-files/本地手动测试清单.md) | U 盘插拔 / 备份 / 增量的真机验收步骤（由使用者手动执行） |
+| [FolderCreator 本地手动测试清单](MD-files/FolderCreator-本地手动测试清单.md) | 六项增强功能的逐项验收步骤（模板 / 反向生成 / 占位文件 / 多根目录 / 检查报告 / 目录树） |
 
 ---
 
@@ -100,14 +101,14 @@ WinToolBox/
 - **语言 / 框架**：C# · .NET 8（`net8.0-windows`）· WinForms
 - **测试**：xUnit（`dotnet test`）
 - **依赖**：不引入任何第三方商业 NuGet 包，全部使用 .NET 原生 API
-- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.2.1`）
+- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.2.2`）
 - **持续集成**：[`.github/workflows/release.yml`](.github/workflows/release.yml) —— 推送 `v*` 标签后，
   在 `windows-latest` 上还原依赖、编译 Release、运行 `dotnet test`、分别发布 UsbBackup 与 FolderCreator 的
   单文件 exe、打包为 `UsbBackup-win-x64.zip` 与 `FolderCreator-win-x64.zip`，并创建 GitHub Release：
 
   ```powershell
-  git tag v0.2.1
-  git push origin v0.2.1
+  git tag v0.2.2
+  git push origin v0.2.2
   ```
 
 > 云端 CI 没有物理 U 盘，`UsbDetector` / `WM_DEVICECHANGE` 的运行期行为不在 CI 中验证（但必须编译通过）；

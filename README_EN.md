@@ -17,7 +17,7 @@ shared capabilities live in the `src/WinToolBox.Core` library, and unit tests li
 | Tool | Type | Description | Docs |
 | --- | --- | --- | --- |
 | **UsbBackup** | WinForms desktop + tray resident | USB drive backup tool (**manually triggered**): incrementally backs up a USB drive into a target folder using “volume label + volume serial number + date”; the main window manages the backup folder and shows the live log | **[User guide](src/Tools/UsbBackup/README_EN.md)** |
-| **FolderCreator** | WinForms desktop | Batch-creates folder structures and checks whether an existing directory matches the rules (strict / loose mode) | **[User guide](src/Tools/FolderCreator/README_EN.md)** |
+| **FolderCreator** | WinForms desktop | Batch-creates folder structures and checks whether an existing directory matches the rules (strict / loose mode); supports rule templates, generating rules from an existing directory, placeholder files, multi-root batch creation, and check-report / directory-tree export | **[User guide](src/Tools/FolderCreator/README_EN.md)** |
 | **WinToolBox.Core** | Class library | Shared building blocks: configuration, logging, tray notifications, incremental copy engine, USB drive detection, backup rules | **[Library guide](src/WinToolBox.Core/README_EN.md)** |
 
 > Requirements: Windows 10 / 11 (x64). Release packages are **self-contained single files**, so the target machine
@@ -90,9 +90,10 @@ All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` be
 | Document | Contents |
 | --- | --- |
 | [UsbBackup user guide](src/Tools/UsbBackup/README_EN.md) | Main window and tray usage, backup rules, config and log paths, command-line options, FAQ |
-| [FolderCreator user guide](src/Tools/FolderCreator/README_EN.md) | Rule syntax, automatic parent creation, strict/loose check modes, command-line options |
+| [FolderCreator user guide](src/Tools/FolderCreator/README_EN.md) | Rule syntax, automatic parent creation, strict/loose check modes, six enhanced features (templates / reverse generation / placeholders / multi-root / check report / directory tree), command-line options |
 | [WinToolBox.Core library guide](src/WinToolBox.Core/README_EN.md) | Type list, typical usage and design conventions of the shared library |
 | [Manual test checklist](MD-files/本地手动测试清单_EN.md) | On-device acceptance steps for USB plug/unplug, backup and incremental copy (performed manually by the user) |
+| [FolderCreator manual test checklist (Chinese)](MD-files/FolderCreator-本地手动测试清单.md) | Item-by-item acceptance steps for the six enhanced features (templates / reverse generation / placeholders / multi-root / check report / directory tree) |
 
 ---
 
@@ -101,15 +102,15 @@ All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` be
 - **Language / framework**: C# · .NET 8 (`net8.0-windows`) · WinForms
 - **Tests**: xUnit (`dotnet test`)
 - **Dependencies**: no third-party commercial NuGet packages — .NET native APIs only
-- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.2.1`)
+- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.2.2`)
 - **Continuous integration**: [`.github/workflows/release.yml`](.github/workflows/release.yml) — pushing a `v*` tag makes
   `windows-latest` restore dependencies, build in Release, run `dotnet test`, publish the single-file executables of
   UsbBackup and FolderCreator, pack them into `UsbBackup-win-x64.zip` and `FolderCreator-win-x64.zip`, and create a
   GitHub Release:
 
   ```powershell
-  git tag v0.2.1
-  git push origin v0.2.1
+  git tag v0.2.2
+  git push origin v0.2.2
   ```
 
 > Cloud CI has no physical USB drive, so the runtime behaviour of `UsbDetector` / `WM_DEVICECHANGE` is not verified there
