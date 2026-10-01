@@ -1,4 +1,5 @@
 using WinToolBox.Core;
+using WinToolBox.Core.Services;
 using WinToolBox.Tools.FolderCreator.Models;
 
 namespace WinToolBox.Tools.FolderCreator;
@@ -30,6 +31,12 @@ public sealed class FolderItemResult
 
     /// <summary>补充说明（失败原因等）。</summary>
     public string? Message { get; init; }
+
+    /// <summary>本次是否为该目录创建了占位文件。</summary>
+    public bool PlaceholderCreated { get; init; }
+
+    /// <summary>占位文件完整路径（未创建时为 null）。</summary>
+    public string? PlaceholderPath { get; init; }
 }
 
 /// <summary>批量创建文件夹的结果汇总。</summary>
@@ -41,6 +48,9 @@ public sealed class FolderGenerationResult
     /// <summary>逐条明细，顺序与规则一致。</summary>
     public IReadOnlyList<FolderItemResult> Items { get; init; } = Array.Empty<FolderItemResult>();
 
+    /// <summary>整个根目录处理失败时的原因。</summary>
+    public string? Error { get; init; }
+
     /// <summary>新建数量。</summary>
     public int CreatedCount => Items.Count(static i => i.Status == FolderItemStatus.Created);
 
@@ -50,12 +60,26 @@ public sealed class FolderGenerationResult
     /// <summary>失败数量。</summary>
     public int FailedCount => Items.Count(static i => i.Status == FolderItemStatus.Failed);
 
+    /// <summary>本次创建的占位文件数量。</summary>
+    public int PlaceholderCount => Items.Count(static i => i.PlaceholderCreated);
+
     /// <summary>是否全部成功。</summary>
-    public bool Success => FailedCount == 0;
+    public bool Success => Error is null && FailedCount == 0;
 
     /// <summary>中文摘要。</summary>
-    public string Summary =>
-        $"创建完成：新建 {CreatedCount} 个，跳过 {ExistedCount} 个已存在，失败 {FailedCount} 个。";
+    public string Summary
+    {
+        get
+        {
+            if (Error is not null)
+            {
+                return $"创建失败：{Error}";
+            }
+
+            var text = $"创建完成：新建 {CreatedCount} 个，跳过 {ExistedCount} 个已存在，失败 {FailedCount} 个。";
+            return PlaceholderCount > 0 ? text + $" 另创建占位文件 {PlaceholderCount} 个。" : text;
+        }
+    }
 }
 
 /// <summary>创建进度快照。</summary>
@@ -75,27 +99,40 @@ public sealed class FolderProgress
 }
 
 /// <summary>
-/// 文件夹生成器：按规则在根目录下批量创建文件夹（父级自动递归创建），已存在则跳过。
+/// 文件夹生成器：规则模型与 <see cref="FolderCreatorService"/> 之间的适配层。
+/// 真正的创建逻辑（含占位文件、多根目录）都在 WinToolBox.Core 中，本类只做规则映射与结果转换。
 /// </summary>
 public sealed class FolderGenerator
 {
     private readonly Logger? _logger;
+    private readonly FolderCreatorService _service;
 
     /// <summary>创建生成器。</summary>
     public FolderGenerator(Logger? logger = null)
     {
         _logger = logger;
+        _service = new FolderCreatorService(logger);
     }
 
     /// <summary>
     /// 在后台线程批量创建文件夹（不阻塞 UI）。
     /// </summary>
+    /// <param name="rootDirectory">根目录。</param>
+    /// <param name="rules">规则列表。</param>
+    /// <param name="progress">进度回调。</param>
+    /// <param name="cancellationToken">取消标记。</param>
+    /// <param name="createPlaceholder">是否为空目录创建占位文件。</param>
+    /// <param name="placeholderName">占位文件名，默认 <c>.gitkeep</c>。</param>
     public Task<FolderGenerationResult> GenerateAsync(
         string rootDirectory,
         IReadOnlyList<FolderRule> rules,
         IProgress<FolderProgress>? progress = null,
-        CancellationToken cancellationToken = default)
-        => Task.Run(() => Generate(rootDirectory, rules, progress, cancellationToken), cancellationToken);
+        CancellationToken cancellationToken = default,
+        bool createPlaceholder = false,
+        string placeholderName = FolderCreatorService.DefaultPlaceholderName)
+        => Task.Run(
+            () => Generate(rootDirectory, rules, progress, cancellationToken, createPlaceholder, placeholderName),
+            cancellationToken);
 
     /// <summary>
     /// 批量创建文件夹。参数非法时抛 <see cref="ArgumentException"/>；
@@ -105,119 +142,68 @@ public sealed class FolderGenerator
         string rootDirectory,
         IReadOnlyList<FolderRule> rules,
         IProgress<FolderProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool createPlaceholder = false,
+        string placeholderName = FolderCreatorService.DefaultPlaceholderName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootDirectory);
         ArgumentNullException.ThrowIfNull(rules);
-        cancellationToken.ThrowIfCancellationRequested();
 
-        var root = ResolveRoot(rootDirectory);
-        var items = new List<FolderItemResult>(rules.Count);
+        var paths = new List<string>(rules.Count);
+        paths.AddRange(rules.Select(static rule => rule.RelativePath));
 
-        // 根目录本身不存在时一并创建，避免后续每一条都失败
-        try
-        {
-            if (!Directory.Exists(root))
-            {
-                Directory.CreateDirectory(root);
-                _logger?.Info($"已创建根目录：{root}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger?.Warn($"创建根目录失败：{root}", ex);
-        }
+        var core = _service.CreateFolders(
+            rootDirectory,
+            paths,
+            createPlaceholder,
+            placeholderName,
+            progress is null ? null : new ProgressBridge(progress),
+            cancellationToken);
 
-        var total = rules.Count;
-        var processed = 0;
-
-        foreach (var rule in rules)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var fullPath = Path.Combine(root, rule.RelativePath);
-            FolderItemResult item;
-
-            try
-            {
-                if (Directory.Exists(fullPath))
-                {
-                    item = new FolderItemResult
-                    {
-                        RelativePath = rule.RelativePath,
-                        FullPath = fullPath,
-                        Status = FolderItemStatus.Existed,
-                        Message = "已存在，跳过"
-                    };
-                }
-                else
-                {
-                    Directory.CreateDirectory(fullPath);
-                    item = new FolderItemResult
-                    {
-                        RelativePath = rule.RelativePath,
-                        FullPath = fullPath,
-                        Status = FolderItemStatus.Created
-                    };
-                }
-            }
-            catch (Exception ex)
-            {
-                item = new FolderItemResult
-                {
-                    RelativePath = rule.RelativePath,
-                    FullPath = fullPath,
-                    Status = FolderItemStatus.Failed,
-                    Message = DescribeError(ex)
-                };
-
-                _logger?.Warn($"创建文件夹失败：{fullPath}", ex);
-            }
-
-            items.Add(item);
-
-            processed++;
-            progress?.Report(new FolderProgress
-            {
-                Total = total,
-                Processed = processed,
-                CurrentPath = rule.RelativePath
-            });
-        }
-
-        var result = new FolderGenerationResult
-        {
-            RootDirectory = root,
-            Items = items
-        };
-
-        _logger?.Info($"文件夹创建完成：根目录 {root}；{result.Summary}");
-
-        return result;
+        return ToGenerationResult(core);
     }
 
-    /// <summary>把异常翻译成友好的中文提示。</summary>
-    private static string DescribeError(Exception ex) => ex switch
+    /// <summary>把 Core 的创建结果转换成界面使用的规则结果（多根目录模式也会用到）。</summary>
+    public static FolderGenerationResult ToGenerationResult(FolderCreateResult core)
     {
-        UnauthorizedAccessException => "权限不足，无法创建该文件夹。",
-        PathTooLongException => "路径过长，超出系统限制。",
-        DirectoryNotFoundException => "上级目录不存在或路径无效。",
-        ArgumentException => "路径中包含非法字符或格式不正确。",
-        NotSupportedException => "路径格式不受支持（例如包含冒号）。",
-        IOException io => $"IO 错误：{io.Message}",
-        _ => ex.Message
-    };
+        ArgumentNullException.ThrowIfNull(core);
 
-    /// <summary>规范化并校验根目录路径。</summary>
-    private static string ResolveRoot(string rootDirectory)
+        return new FolderGenerationResult
+        {
+            RootDirectory = core.RootDirectory,
+            Error = core.Error,
+            Items = core.Items
+                .Select(static item => new FolderItemResult
+                {
+                    RelativePath = item.RelativePath,
+                    FullPath = item.FullPath,
+                    Status = item.Status switch
+                    {
+                        FolderCreateStatus.Created => FolderItemStatus.Created,
+                        FolderCreateStatus.Existed => FolderItemStatus.Existed,
+                        _ => FolderItemStatus.Failed
+                    },
+                    Message = item.Message,
+                    PlaceholderCreated = item.PlaceholderCreated,
+                    PlaceholderPath = item.PlaceholderPath
+                })
+                .ToList()
+        };
+    }
+
+    /// <summary>把 Core 的进度同步转发成界面进度（不额外切换线程）。</summary>
+    private sealed class ProgressBridge : IProgress<FolderCreateProgress>
     {
-        try
-        {
-            return Path.GetFullPath(rootDirectory);
-        }
-        catch (Exception ex)
-        {
-            throw new ArgumentException($"根目录路径无效：{ex.Message}", nameof(rootDirectory), ex);
-        }
+        private readonly IProgress<FolderProgress> _inner;
+
+        public ProgressBridge(IProgress<FolderProgress> inner) => _inner = inner;
+
+        public void Report(FolderCreateProgress value)
+            => _inner.Report(new FolderProgress
+            {
+                Total = value.Total,
+                Processed = value.Processed,
+                CurrentPath = value.CurrentPath
+            });
     }
 }

@@ -1,4 +1,5 @@
 using WinToolBox.Core;
+using WinToolBox.Core.Services;
 using WinToolBox.Tools.FolderCreator.Models;
 
 namespace WinToolBox.Tools.FolderCreator;
@@ -113,13 +114,19 @@ public sealed class FolderChecker
     /// 检查目标根目录是否符合规则。
     /// 根目录不存在时不会抛异常，而是返回带 <see cref="FolderCheckResult.Error"/> 的结果。
     /// </summary>
+    /// <param name="rootDirectory">目标根目录。</param>
+    /// <param name="rules">规则列表。</param>
+    /// <param name="mode">检查模式（严格模式会额外报告「多余」）。</param>
+    /// <param name="cancellationToken">取消标记。</param>
     public FolderCheckResult Check(
         string rootDirectory,
         IReadOnlyList<FolderRule> rules,
-        FolderCheckMode mode = FolderCheckMode.Strict)
+        FolderCheckMode mode = FolderCheckMode.Strict,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootDirectory);
         ArgumentNullException.ThrowIfNull(rules);
+        cancellationToken.ThrowIfCancellationRequested();
 
         string root;
         try
@@ -152,6 +159,8 @@ public sealed class FolderChecker
         var expected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var rule in rules)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!expected.Add(rule.RelativePath))
             {
                 continue;
@@ -171,8 +180,10 @@ public sealed class FolderChecker
         // 目标侧：严格模式下把规则里没有的目录标记为“多余”
         if (mode == FolderCheckMode.Strict)
         {
-            foreach (var relative in EnumerateRelativeDirectories(root))
+            foreach (var relative in EnumerateRelativeDirectories(root, cancellationToken))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (expected.Contains(relative))
                 {
                     continue;
@@ -204,8 +215,38 @@ public sealed class FolderChecker
         return result;
     }
 
+    /// <summary>
+    /// 把检查结果转换成可导出的报告数据（Markdown 报告由
+    /// <see cref="FolderCreatorService.ExportCheckReport"/> 生成）。
+    /// </summary>
+    /// <param name="result">检查结果。</param>
+    /// <param name="checkedAt">检查时间；为空时取当前时间。</param>
+    public static FolderCheckReport ToReport(FolderCheckResult result, DateTimeOffset? checkedAt = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        return new FolderCheckReport
+        {
+            RootDirectory = result.RootDirectory,
+            ModeText = result.Mode == FolderCheckMode.Strict ? "严格模式" : "宽松模式",
+            CheckedAt = checkedAt ?? DateTimeOffset.Now,
+            Entries = result.Items
+                .Select(static item => new FolderCheckEntry
+                {
+                    RelativePath = item.RelativePath,
+                    Kind = item.Status switch
+                    {
+                        FolderCheckStatus.Matched => FolderCheckEntryKind.Matched,
+                        FolderCheckStatus.Missing => FolderCheckEntryKind.Missing,
+                        _ => FolderCheckEntryKind.Extra
+                    }
+                })
+                .ToList()
+        };
+    }
+
     /// <summary>递归枚举目标根目录下的所有子目录（相对路径），跳过无法访问的目录与重解析点。</summary>
-    private static List<string> EnumerateRelativeDirectories(string root)
+    private static List<string> EnumerateRelativeDirectories(string root, CancellationToken cancellationToken)
     {
         var results = new List<string>();
         var pending = new Stack<string>();
@@ -213,6 +254,8 @@ public sealed class FolderChecker
 
         while (pending.Count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var current = pending.Pop();
 
             string[] children;

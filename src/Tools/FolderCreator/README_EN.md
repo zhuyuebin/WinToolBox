@@ -26,6 +26,20 @@ Download: open <https://github.com/zhuyuebin/WinToolBox/releases/latest>, downlo
 4. **Choose the mode**: when checking, choose **严格模式** (Strict mode, the default, which also reports 「多余」/ Extra) or **宽松模式** (Lenient mode, which only reports 「缺失」/ Missing).
 5. **Run**: 「创建文件夹」 (Create folders) starts batch creation, and 「检查一致性」 (Check consistency) compares the target directory; results are shown in the result tree on the right, and progress and hints are shown in the status bar at the bottom.
 
+## Enhanced features (6 new in v0.2.2)
+
+| Feature | How to use it | Notes |
+| --- | --- | --- |
+| **Rule template management** | Load from the 「模板」 (Template) combo box; save or remove with 「保存为模板」 (Save as template) / 「删除模板」 (Delete template) | 「保存为模板」 opens a **name input dialog** prefilled with the current combo box content: type a **new name to create a template**, and only a duplicate name asks whether to overwrite; built-in templates are 「Web 项目」 and 「Python 项目」; the library lives in `%AppData%\WinToolBox\FolderCreator\templates.json` and the built-ins are written on first run |
+| **Generate rules from an existing directory** | 「从现有目录生成规则」 (Generate rules from directory) | Scans the root directory and produces hyphen-indented rules, sorted by name at every level and stable across runs; `.git`, `node_modules`, `bin`, `obj` and `.vs` are excluded by default |
+| **Placeholder files** | Tick 「为空目录创建占位文件（.gitkeep）」 (Create placeholder files for empty directories) | Creates a 0-byte `.gitkeep` only in **truly empty** directories (no files and no subdirectories); an existing placeholder is skipped without error |
+| **Multi-root batch creation** | Tick 「启用多根目录」 (Enable multi-root), one path per line | Duplicates are removed (case-insensitive) and blank/invalid paths are ignored; per-root progress shows 「当前处理第 X / 共 Y 个」; one failing root does not stop the others |
+| **Check report export** | 「导出检查报告」 (Export check report), after running a check | Produces Markdown with the check time, target directory, mode, a statistics table and per-category details; any category with more than 100 items is folded into `<details>` |
+| **Directory tree export** | 「导出目录树」 (Export directory tree) | Produces standard `tree`-style text (`├─`/`└─`/`│`) plus a directory count at the end, with the same default exclusions |
+
+> A 「运行日志」 (Run log) panel at the bottom of the window shows operation logs live (they are also written to `%LocalAppData%\WinToolBox\logs\`).
+> Step-by-step acceptance steps for all six features are in the [FolderCreator manual test checklist (Chinese)](../../../MD-files/FolderCreator-本地手动测试清单.md).
+
 ## Rule syntax
 
 Use consecutive `-` characters at the start of a line to express hierarchy: one `-` is level 1, `--` is level 2, `---` is level 3, and so on.
