@@ -38,7 +38,7 @@ Download: open <https://github.com/zhuyuebin/WinToolBox/releases/latest>, downlo
 | **Directory tree export** | 「导出目录树」 (Export directory tree) | Produces standard `tree`-style text (`├─`/`└─`/`│`) plus a directory count at the end, with the same default exclusions |
 
 > A 「运行日志」 (Run log) panel at the bottom of the window shows operation logs live (they are also written to `%LocalAppData%\WinToolBox\logs\`).
-> Step-by-step acceptance steps for all six features are in the [FolderCreator manual test checklist (Chinese)](../../../MD-files/FolderCreator-本地手动测试清单.md).
+> Step-by-step acceptance steps for all six features are in the [FolderCreator manual test checklist](../../../MD-files/FolderCreator-本地手动测试清单_EN.md).
 
 ## Rule syntax
 

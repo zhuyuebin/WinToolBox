@@ -1,5 +1,7 @@
 # FolderCreator 本地手动测试清单（v0.2.2 · 六项增强功能）
 
+[English](FolderCreator-本地手动测试清单_EN.md) | [简体中文](FolderCreator-本地手动测试清单.md)
+
 > 适用程序：`FolderCreator.exe`（WinToolBox 的文件夹批量创建工具，win-x64 免安装单文件）
 > 适用系统：Windows 10 / 11
 > 执行人：用户（本人在物理机上手动操作）

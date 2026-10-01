@@ -93,7 +93,7 @@ All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` be
 | [FolderCreator user guide](src/Tools/FolderCreator/README_EN.md) | Rule syntax, automatic parent creation, strict/loose check modes, six enhanced features (templates / reverse generation / placeholders / multi-root / check report / directory tree), command-line options |
 | [WinToolBox.Core library guide](src/WinToolBox.Core/README_EN.md) | Type list, typical usage and design conventions of the shared library |
 | [Manual test checklist](MD-files/本地手动测试清单_EN.md) | On-device acceptance steps for USB plug/unplug, backup and incremental copy (performed manually by the user) |
-| [FolderCreator manual test checklist (Chinese)](MD-files/FolderCreator-本地手动测试清单.md) | Item-by-item acceptance steps for the six enhanced features (templates / reverse generation / placeholders / multi-root / check report / directory tree) |
+| [FolderCreator manual test checklist](MD-files/FolderCreator-本地手动测试清单_EN.md) | Item-by-item acceptance steps for the six enhanced features (templates / reverse generation / placeholders / multi-root / check report / directory tree) |
 
 ---
 
