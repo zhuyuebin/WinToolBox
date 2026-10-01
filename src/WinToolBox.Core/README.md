@@ -1,5 +1,7 @@
 # WinToolBox.Core
 
+[English](README_EN.md) | [简体中文](README.md)
+
 [← 返回 WinToolBox 总览](../../README.md)
 
 `WinToolBox.Core` 是 WinToolBox 各工具共用的基础类库（`net8.0-windows`），

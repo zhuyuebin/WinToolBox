@@ -1,5 +1,7 @@
 # UsbBackup 使用说明
 
+[English](README_EN.md) | [简体中文](README.md)
+
 > WinToolBox 子工具：把 U 盘**增量备份**到本地硬盘的指定目录。插上 U 盘后**手动点「立即备份」**，程序不做任何自动拷贝。
 
 [← 返回 WinToolBox 总览](../../../README.md)

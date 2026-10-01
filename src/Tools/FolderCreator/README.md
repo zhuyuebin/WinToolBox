@@ -1,5 +1,7 @@
 # FolderCreator 使用说明
 
+[English](README_EN.md) | [简体中文](README.md)
+
 > WinToolBox 子工具：用一段「短横线缩进」文本描述文件夹层级，一次性**批量创建文件夹结构**，也可以**检查现有目录是否符合规则**。
 
 [← 返回 WinToolBox 总览](../../../README.md)

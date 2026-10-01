@@ -16,9 +16,9 @@ shared capabilities live in the `src/WinToolBox.Core` library, and unit tests li
 
 | Tool | Type | Description | Docs |
 | --- | --- | --- | --- |
-| **UsbBackup** | WinForms desktop + tray resident | USB drive backup tool (**manually triggered**): incrementally backs up a USB drive into a target folder using “volume label + volume serial number + date”; the main window manages the backup folder and shows the live log | **[User guide](src/Tools/UsbBackup/README.md)** |
-| **FolderCreator** | WinForms desktop | Batch-creates folder structures and checks whether an existing directory matches the rules (strict / loose mode) | **[User guide](src/Tools/FolderCreator/README.md)** |
-| **WinToolBox.Core** | Class library | Shared building blocks: configuration, logging, tray notifications, incremental copy engine, USB drive detection, backup rules | **[Library guide](src/WinToolBox.Core/README.md)** |
+| **UsbBackup** | WinForms desktop + tray resident | USB drive backup tool (**manually triggered**): incrementally backs up a USB drive into a target folder using “volume label + volume serial number + date”; the main window manages the backup folder and shows the live log | **[User guide](src/Tools/UsbBackup/README_EN.md)** |
+| **FolderCreator** | WinForms desktop | Batch-creates folder structures and checks whether an existing directory matches the rules (strict / loose mode) | **[User guide](src/Tools/FolderCreator/README_EN.md)** |
+| **WinToolBox.Core** | Class library | Shared building blocks: configuration, logging, tray notifications, incremental copy engine, USB drive detection, backup rules | **[Library guide](src/WinToolBox.Core/README_EN.md)** |
 
 > Requirements: Windows 10 / 11 (x64). Release packages are **self-contained single files**, so the target machine
 > **does not need .NET installed**.
@@ -37,7 +37,7 @@ shared capabilities live in the `src/WinToolBox.Core` library, and unit tests li
 
 > The executables are not code-signed, so Windows SmartScreen may block the first launch
 > (“Windows protected your PC”): click “More info” → “Run anyway”. If it prompts **every time**, see the
-> [UsbBackup FAQ](src/Tools/UsbBackup/README.md#常见问题) (clear the “downloaded from the internet” mark).
+> [UsbBackup FAQ](src/Tools/UsbBackup/README_EN.md#faq) (clear the “downloaded from the internet” mark).
 
 ### Option 2: Build from source
 
@@ -86,10 +86,10 @@ Every tool folder contains its own `README.md` with full usage instructions and 
 
 | Document | Contents |
 | --- | --- |
-| [UsbBackup user guide](src/Tools/UsbBackup/README.md) | Main window and tray usage, backup rules, config and log paths, command-line options, FAQ |
-| [FolderCreator user guide](src/Tools/FolderCreator/README.md) | Rule syntax, automatic parent creation, strict/loose check modes, command-line options |
-| [WinToolBox.Core library guide](src/WinToolBox.Core/README.md) | Type list, typical usage and design conventions of the shared library |
-| [Manual test checklist (Chinese)](MD-files/本地手动测试清单.md) | On-device acceptance steps for USB plug/unplug, backup and incremental copy (performed manually by the user) |
+| [UsbBackup user guide](src/Tools/UsbBackup/README_EN.md) | Main window and tray usage, backup rules, config and log paths, command-line options, FAQ |
+| [FolderCreator user guide](src/Tools/FolderCreator/README_EN.md) | Rule syntax, automatic parent creation, strict/loose check modes, command-line options |
+| [WinToolBox.Core library guide](src/WinToolBox.Core/README_EN.md) | Type list, typical usage and design conventions of the shared library |
+| [Manual test checklist](MD-files/本地手动测试清单_EN.md) | On-device acceptance steps for USB plug/unplug, backup and incremental copy (performed manually by the user) |
 
 ---
 
@@ -111,7 +111,7 @@ Every tool folder contains its own `README.md` with full usage instructions and 
 
 > Cloud CI has no physical USB drive, so the runtime behaviour of `UsbDetector` / `WM_DEVICECHANGE` is not verified there
 > (it must still compile). Real plug/unplug and incremental backup verification should be done on your own machine
-> following the [manual test checklist](MD-files/本地手动测试清单.md).
+> following the [manual test checklist](MD-files/本地手动测试清单_EN.md).
 
 ---
 
