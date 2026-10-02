@@ -1,8 +1,8 @@
-# UsbBackup Manual Test Checklist v0.2.2
+# UsbBackup Manual Test Checklist v0.4.0
 
 [English](本地手动测试清单_EN.md) | [简体中文](本地手动测试清单.md)
 
-> Applies to: `UsbBackup.exe` (WinToolBox's USB drive backup tool, v0.2.2, win-x64 portable single file)
+> Applies to: `UsbBackup.exe` (WinToolBox's USB drive backup tool, v0.4.0, win-x64 portable single file)
 > Systems: Windows 10 / 11
 > Performed by: the user (manual operation on a physical machine in person)
 > Estimated time: about 35 minutes (6 core rounds)

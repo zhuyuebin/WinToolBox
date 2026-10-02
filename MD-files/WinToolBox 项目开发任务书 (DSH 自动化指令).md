@@ -3,7 +3,7 @@
 ## 1. 项目基本信息
 - 仓库名称：WinToolBox
 - 仓库地址：https://github.com/zhuyuebin/WinToolBox
-- 作者：朱玥彬
+- 作者：Zhu Yuebin
 - 开源协议：MIT
 - 项目定位：Windows 小工具集合（Monorepo 单仓库多项目模式）
 
@@ -40,7 +40,7 @@ WinToolBox/
 ```xml
 <Project>
   <PropertyGroup>
-    <Authors>朱玥彬</Authors>
+    <Authors>Zhu Yuebin</Authors>
     <RepositoryUrl>https://github.com/zhuyuebin/WinToolBox</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Version>0.1.0</Version>

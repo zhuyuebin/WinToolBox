@@ -37,15 +37,15 @@ if ($targetFull.StartsWith([System.IO.Path]::GetFullPath($root), [System.StringC
 
 Write-Host "==> 1/4 编译并发布到 $targetFull"
 Remove-Item $targetFull -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path (Join-Path $targetFull 'FolderCreator') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $targetFull 'FileMaster') | Out-Null
 
 dotnet publish (Join-Path $root 'src\Tools\UsbBackup\UsbBackup.csproj') `
     -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o $targetFull | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "UsbBackup 发布失败，退出码 $LASTEXITCODE" }
 
-dotnet publish (Join-Path $root 'src\Tools\FolderCreator\FolderCreator.csproj') `
-    -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o (Join-Path $targetFull 'FolderCreator') | Out-Host
-if ($LASTEXITCODE -ne 0) { throw "FolderCreator 发布失败，退出码 $LASTEXITCODE" }
+dotnet publish (Join-Path $root 'src\Tools\FileMaster\FileMaster.csproj') `
+    -c Release -r win-x64 --self-contained false -p:PublishSingleFile=false -o (Join-Path $targetFull 'FileMaster') | Out-Host
+if ($LASTEXITCODE -ne 0) { throw "FileMaster 发布失败，退出码 $LASTEXITCODE" }
 
 Write-Host '==> 2/4 解除「下载来源」标记（消除 SmartScreen 反复提示）'
 Get-ChildItem $targetFull -Recurse -File | Unblock-File

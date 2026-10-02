@@ -38,10 +38,10 @@ public class TemplateManagerTests
     }
 
     [Fact]
-    public void DefaultFilePath_PointsToFolderCreatorTemplatesJson()
+    public void DefaultFilePath_PointsToFileMasterTemplatesJson()
     {
         Assert.EndsWith(
-            Path.Combine("WinToolBox", "FolderCreator", "templates.json"),
+            Path.Combine("WinToolBox", "FileMaster", "templates.json"),
             TemplateManager.DefaultFilePath);
     }
 

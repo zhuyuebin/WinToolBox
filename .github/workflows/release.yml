@@ -18,7 +18,7 @@ env:
 
 jobs:
   release:
-    name: 测试、构建并发布 UsbBackup / FolderCreator (win-x64)
+    name: 测试、构建并发布 UsbBackup / FileMaster (win-x64)
     runs-on: windows-latest
 
     steps:
@@ -61,19 +61,19 @@ jobs:
             -o publish/UsbBackup
           if ($LASTEXITCODE -ne 0) { throw "UsbBackup 发布失败，退出码 $LASTEXITCODE" }
 
-          dotnet publish src/Tools/FolderCreator/FolderCreator.csproj `
+          dotnet publish src/Tools/FileMaster/FileMaster.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
             -p:PublishSingleFile=true `
-            -o publish/FolderCreator
-          if ($LASTEXITCODE -ne 0) { throw "FolderCreator 发布失败，退出码 $LASTEXITCODE" }
+            -o publish/FileMaster
+          if ($LASTEXITCODE -ne 0) { throw "FileMaster 发布失败，退出码 $LASTEXITCODE" }
 
       # 产物存在性校验：避免构建异常时静默发布一个空包。
       - name: 校验产物存在
         shell: pwsh
         run: |
-          $expected = @('publish/UsbBackup/UsbBackup.exe', 'publish/FolderCreator/FolderCreator.exe')
+          $expected = @('publish/UsbBackup/UsbBackup.exe', 'publish/FileMaster/FileMaster.exe')
           foreach ($exe in $expected) {
             if (-not (Test-Path -Path $exe -PathType Leaf)) {
               throw "发布失败：未找到 $exe"
@@ -87,7 +87,7 @@ jobs:
         run: |
           $targets = @(
             @{ Name = 'UsbBackup-win-x64.zip';     Source = 'publish/UsbBackup/*' },
-            @{ Name = 'FolderCreator-win-x64.zip'; Source = 'publish/FolderCreator/*' }
+            @{ Name = 'FileMaster-win-x64.zip'; Source = 'publish/FileMaster/*' }
           )
 
           foreach ($t in $targets) {
@@ -105,5 +105,5 @@ jobs:
           name: WinToolBox ${{ github.ref_name }}
           files: |
             UsbBackup-win-x64.zip
-            FolderCreator-win-x64.zip
+            FileMaster-win-x64.zip
           generate_release_notes: true

@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace WinToolBox.Core.Services;
 
 /// <summary>
-/// FolderCreator 规则模板管理：读写 <c>%AppData%\WinToolBox\FolderCreator\templates.json</c>。
+/// FileMaster 规则模板管理：读写 <c>%AppData%\WinToolBox\FileMaster\templates.json</c>。
 /// </summary>
 /// <remarks>
 /// <para>数据结构是「模板名 -&gt; 规则文本」的字典，模板名不区分大小写。</para>
@@ -33,7 +33,7 @@ public sealed class TemplateManager
 
     /// <summary>使用默认模板文件路径。</summary>
     public TemplateManager()
-        : this(AppPaths.FolderCreatorTemplatesFile, null)
+        : this(AppPaths.FileMasterTemplatesFile, null)
     {
     }
 
@@ -58,7 +58,36 @@ public sealed class TemplateManager
     }
 
     /// <summary>默认模板文件完整路径。</summary>
-    public static string DefaultFilePath => AppPaths.FolderCreatorTemplatesFile;
+    public static string DefaultFilePath => AppPaths.FileMasterTemplatesFile;
+
+    /// <summary>
+    /// 一次性迁移：把旧版 <c>%AppData%\WinToolBox\FolderCreator\templates.json</c> 复制到新的 FileMaster 目录。
+    /// 仅当「新文件不存在且旧文件存在」时执行，失败不抛异常（迁移失败不影响程序启动）。
+    /// </summary>
+    /// <returns>发生迁移返回 true，否则返回 false。</returns>
+    public static bool MigrateLegacyTemplates(Logger? logger = null)
+    {
+        var target = DefaultFilePath;
+        var legacy = AppPaths.LegacyFileMasterTemplatesFile;
+
+        try
+        {
+            if (File.Exists(target) || !File.Exists(legacy))
+            {
+                return false;
+            }
+
+            AppPaths.EnsureDirectory(Path.GetDirectoryName(target));
+            File.Copy(legacy, target, overwrite: false);
+            logger?.Info($"已把旧版模板迁移到 FileMaster 目录：{legacy} -> {target}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger?.Warn($"迁移旧版模板失败（不影响使用）：{legacy} -> {target}", ex);
+            return false;
+        }
+    }
 
     /// <summary>当前使用的模板文件完整路径。</summary>
     public string FilePath { get; }

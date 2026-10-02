@@ -1,16 +1,16 @@
 <Project>
   <PropertyGroup>
-    <Authors>朱玥彬</Authors>
+    <Authors>Zhu Yuebin</Authors>
     <RepositoryUrl>https://github.com/zhuyuebin/WinToolBox</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version>0.2.2</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <!-- 全仓库统一编译设置：所有子项目自动继承 -->
   <PropertyGroup>
     <Product>WinToolBox</Product>
-    <Company>朱玥彬</Company>
-    <Copyright>Copyright (c) 2026 朱玥彬</Copyright>
+    <Company>Zhu Yuebin</Company>
+    <Copyright>Copyright (c) 2026 Zhu Yuebin</Copyright>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

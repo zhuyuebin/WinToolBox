@@ -1,4 +1,4 @@
-# FolderCreator Manual Test Checklist (v0.2.2 · Six enhanced features)
+# FolderCreator Manual Test Checklist (v0.4.0 · Six enhanced features)
 
 [English](FolderCreator-本地手动测试清单_EN.md) | [简体中文](FolderCreator-本地手动测试清单.md)
 

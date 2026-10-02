@@ -3,7 +3,7 @@ namespace WinToolBox.Core;
 /// <summary>
 /// WinToolBox 统一路径定义。
 /// 配置：%AppData%\WinToolBox\{工具名}\config.json
-/// 模板：%AppData%\WinToolBox\FolderCreator\templates.json
+/// 模板：%AppData%\WinToolBox\FileMaster\templates.json
 /// 日志：%LocalAppData%\WinToolBox\logs\
 /// </summary>
 public static class AppPaths
@@ -14,13 +14,16 @@ public static class AppPaths
     /// <summary>UsbBackup 工具的配置子目录名。</summary>
     public const string UsbBackupFolderName = "UsbBackup";
 
-    /// <summary>FolderCreator 工具的配置子目录名。</summary>
-    public const string FolderCreatorFolderName = "FolderCreator";
+    /// <summary>FileMaster 工具的配置子目录名。</summary>
+    public const string FileMasterFolderName = "FileMaster";
+
+    /// <summary>FileMaster 的旧目录名（原 FolderCreator，仅用于一次性迁移模板）。</summary>
+    public const string LegacyFileMasterFolderName = "FolderCreator";
 
     /// <summary>配置文件名。</summary>
     public const string ConfigFileName = "config.json";
 
-    /// <summary>FolderCreator 规则模板文件名。</summary>
+    /// <summary>FileMaster 规则模板文件名。</summary>
     public const string TemplatesFileName = "templates.json";
 
     /// <summary>%AppData%\WinToolBox</summary>
@@ -39,11 +42,17 @@ public static class AppPaths
     /// <summary>%AppData%\WinToolBox\UsbBackup\config.json</summary>
     public static string UsbBackupConfigFile => Path.Combine(UsbBackupConfigDirectory, ConfigFileName);
 
-    /// <summary>%AppData%\WinToolBox\FolderCreator</summary>
-    public static string FolderCreatorConfigDirectory => Path.Combine(AppDataRoot, FolderCreatorFolderName);
+    /// <summary>%AppData%\WinToolBox\FileMaster</summary>
+    public static string FileMasterConfigDirectory => Path.Combine(AppDataRoot, FileMasterFolderName);
 
-    /// <summary>%AppData%\WinToolBox\FolderCreator\templates.json</summary>
-    public static string FolderCreatorTemplatesFile => Path.Combine(FolderCreatorConfigDirectory, TemplatesFileName);
+    /// <summary>%AppData%\WinToolBox\FileMaster\templates.json</summary>
+    public static string FileMasterTemplatesFile => Path.Combine(FileMasterConfigDirectory, TemplatesFileName);
+
+    /// <summary>旧版 %AppData%\WinToolBox\FolderCreator\templates.json（迁移来源）。</summary>
+    public static string LegacyFileMasterTemplatesFile => Path.Combine(
+        AppDataRoot,
+        LegacyFileMasterFolderName,
+        TemplatesFileName);
 
     /// <summary>%LocalAppData%\WinToolBox\logs</summary>
     public static string LogDirectory => Path.Combine(LocalAppDataRoot, "logs");

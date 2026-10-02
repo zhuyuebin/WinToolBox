@@ -1,4 +1,4 @@
-# FolderCreator 本地手动测试清单（v0.2.2 · 六项增强功能）
+# FolderCreator 本地手动测试清单（v0.4.0 · 六项增强功能）
 
 [English](FolderCreator-本地手动测试清单_EN.md) | [简体中文](FolderCreator-本地手动测试清单.md)
 

@@ -102,15 +102,15 @@ All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` be
 - **Language / framework**: C# · .NET 8 (`net8.0-windows`) · WinForms
 - **Tests**: xUnit (`dotnet test`)
 - **Dependencies**: no third-party commercial NuGet packages — .NET native APIs only
-- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.2.2`)
+- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.4.0`)
 - **Continuous integration**: [`.github/workflows/release.yml`](.github/workflows/release.yml) — pushing a `v*` tag makes
   `windows-latest` restore dependencies, build in Release, run `dotnet test`, publish the single-file executables of
-  UsbBackup and FolderCreator, pack them into `UsbBackup-win-x64.zip` and `FolderCreator-win-x64.zip`, and create a
+  UsbBackup and FileMaster, pack them into `UsbBackup-win-x64.zip` and `FileMaster-win-x64.zip`, and create a
   GitHub Release:
 
   ```powershell
-  git tag v0.2.2
-  git push origin v0.2.2
+  git tag v0.4.0
+  git push origin v0.4.0
   ```
 
 > Cloud CI has no physical USB drive, so the runtime behaviour of `UsbDetector` / `WM_DEVICECHANGE` is not verified there
@@ -123,6 +123,6 @@ All documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` be
 
 This project is released under the **MIT License** — see [LICENSE](LICENSE).
 
-Author: **朱玥彬** · Repository: <https://github.com/zhuyuebin/WinToolBox>
+Author: **Zhu Yuebin** · Repository: <https://github.com/zhuyuebin/WinToolBox>
 
 This project uses free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
