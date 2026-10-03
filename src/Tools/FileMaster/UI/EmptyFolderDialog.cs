@@ -231,25 +231,24 @@ public sealed class EmptyFolderDialog : FeatureDialogBase
         }, useRecycleBin ? "正在把空文件夹放入回收站…" : "正在永久删除空文件夹…");
     }
 
-    /// <summary>删除前的二次确认（永久删除时明确「不可恢复」）。</summary>
+    /// <summary>
+    /// 删除前的二次确认：永久删除时用醒目文案明确「永久删除、不进回收站、不可恢复」。
+    /// <para>文案本身来自 <see cref="EmptyFolderDeleteMessages"/>，便于单元测试守住这条底线。</para>
+    /// </summary>
     /// <param name="count">待删除数量。</param>
     /// <param name="useRecycleBin">是否放入回收站。</param>
     private bool ConfirmDelete(int count, bool useRecycleBin)
-    {
-        var method = useRecycleBin
-            ? "删除方式：放入回收站（需要时可从回收站还原）。"
-            : "删除方式：永久删除（不可恢复，不会放入回收站）。";
-
-        return ConfirmDanger(
-            $"确定要删除选中的 {count} 个空文件夹吗？{Environment.NewLine}{Environment.NewLine}{method}");
-    }
+        => ConfirmDanger(
+            EmptyFolderDeleteMessages.BuildConfirmMessage(count, useRecycleBin),
+            EmptyFolderDeleteMessages.GetConfirmTitle(useRecycleBin));
 
     /// <summary>把删除结果回填到界面：成功的行从列表移除，失败项汇总提示。</summary>
     /// <param name="result">删除结果。</param>
     private void ApplyDeleteResult(EmptyFolderDeleteResult result)
     {
+        // 只有真正被删除的行才从列表移除；被跳过的条目必须留在列表里让用户看见
         var removed = result.Items
-            .Where(static item => item.Success)
+            .Where(static item => item.Deleted)
             .Select(static item => item.Path)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -276,6 +275,25 @@ public sealed class EmptyFolderDialog : FeatureDialogBase
         SetStatus(result.Summary);
         AppendLog(result.Summary);
         UpdateCheckSummary();
+
+        // 被跳过的条目保留在列表里，让用户能看清「为什么没删」
+        var skipped = result.Items.Where(static item => item.Skipped).ToList();
+        if (skipped.Count > 0)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine($"有 {skipped.Count} 个目录在删除前复查时已不再为空，已自动跳过（未删除其中任何文件）：");
+            foreach (var item in skipped.Take(MaxDisplayedFailures))
+            {
+                builder.AppendLine(item.Path);
+            }
+
+            if (skipped.Count > MaxDisplayedFailures)
+            {
+                builder.AppendLine($"……其余 {skipped.Count - MaxDisplayedFailures} 条请查看运行日志。");
+            }
+
+            ShowWarning(builder.ToString());
+        }
 
         var failures = result.Items.Where(static item => !item.Success).ToList();
         if (failures.Count > 0)

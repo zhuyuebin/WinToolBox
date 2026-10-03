@@ -360,10 +360,25 @@ public partial class MainForm : Form
                 return;
             }
 
-            var isNew = _templateManager.SaveTemplate(name, txtRules.Text);
+            var saved = _templateManager.SaveTemplate(name, txtRules.Text);
+
+            if (!saved)
+            {
+                // 不再假装「模板已保存」：写盘失败必须让用户看到，否则下次启动模板就没了
+                SetStatus("模板保存失败");
+                _logger?.Error($"FileMaster 保存模板失败（未能写入磁盘）：{name}");
+                ShowError(
+                    "模板保存失败：无法写入模板文件。" + Environment.NewLine + Environment.NewLine +
+                    $"文件：{_templateManager.FilePath}" + Environment.NewLine +
+                    (_templateManager.LastPersistError is { } error ? "原因：" + error.Message : string.Empty) +
+                    Environment.NewLine + Environment.NewLine +
+                    "模板仍在本次运行的内存中可用，但重启后会丢失。请检查磁盘空间与目录权限后重试。");
+                return;
+            }
+
             ReloadTemplateList(name);
-            SetStatus($"模板已保存：{name}（{(isNew ? "新建" : "覆盖")}）");
-            _logger?.Info($"FileMaster 保存模板：{name}（{(isNew ? "新建" : "覆盖")}）");
+            SetStatus($"模板已保存：{name}");
+            _logger?.Info($"FileMaster 保存模板：{name}");
         }
         catch (Exception ex)
         {
@@ -402,7 +417,22 @@ public partial class MainForm : Form
                 return;
             }
 
-            _templateManager.DeleteTemplate(name);
+            // P1-5：不能再无条件提示「已删除」—— 写盘失败时 DeleteTemplate 会回滚内存，
+            // 模板仍在（内存与磁盘一致），必须如实告诉用户删除没生效。
+            if (!_templateManager.DeleteTemplate(name))
+            {
+                ReloadTemplateList(name);
+                SetStatus("模板删除失败");
+                _logger?.Error($"FileMaster 删除模板未能落盘：{name}");
+                ShowError(
+                    "模板删除失败：无法写入模板文件。" + Environment.NewLine + Environment.NewLine +
+                    $"文件：{_templateManager.FilePath}" + Environment.NewLine +
+                    (_templateManager.LastPersistError is { } error ? "原因：" + error.Message : string.Empty) +
+                    Environment.NewLine + Environment.NewLine +
+                    "该模板未被删除（内存与磁盘都保持原样）。请检查磁盘空间与目录权限后重试。");
+                return;
+            }
+
             ReloadTemplateList();
             SetStatus($"模板已删除：{name}");
         }

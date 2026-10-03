@@ -31,6 +31,9 @@ public sealed class TemplateManager
     private readonly Logger? _logger;
     private readonly Dictionary<string, string> _templates = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>最近一次模板写盘失败的原因（正常为 null）。</summary>
+    public Exception? LastPersistError { get; private set; }
+
     /// <summary>使用默认模板文件路径。</summary>
     public TemplateManager()
         : this(AppPaths.FileMasterTemplatesFile, null)
@@ -208,26 +211,40 @@ public sealed class TemplateManager
     /// <summary>
     /// 保存模板（同名则覆盖）并立即落盘。
     /// </summary>
-    /// <returns>true 表示新建，false 表示覆盖了已有模板。</returns>
+    /// <returns>true 表示保存成功（含新建与覆盖）；false 表示写盘失败。</returns>
+    /// <remarks>
+    /// 写盘失败时返回 false 而**不再静默成功**：旧实现把 <see cref="Persist"/> 的异常吞在内部，
+    /// 界面上却照样提示「模板已保存」，用户在下次启动时才发现模板不见了。
+    /// </remarks>
     public bool SaveTemplate(string name, string rules)
     {
         var trimmedName = NormalizeName(name);
         ArgumentNullException.ThrowIfNull(rules);
 
-        bool isNew;
+        var isNew = false;
         lock (_gate)
         {
             isNew = !_templates.ContainsKey(trimmedName);
             _templates[trimmedName] = rules;
         }
 
-        Persist();
-        _logger?.Info($"FolderCreator 模板已保存：{trimmedName}（{(isNew ? "新建" : "覆盖")}）");
-        return isNew;
+        if (!Persist())
+        {
+            _logger?.Error($"模板保存失败（未能写入磁盘）：{trimmedName}");
+            return false;
+        }
+
+        _logger?.Info($"模板已保存：{trimmedName}（{(isNew ? "新建" : "覆盖")}）");
+        return true;
     }
 
     /// <summary>删除模板并立即落盘。</summary>
-    /// <returns>true 表示确实删除了模板。</returns>
+    /// <returns>删除并成功落盘返回 true；模板不存在或写盘失败返回 false。</returns>
+    /// <remarks>
+    /// 写盘失败时会**回滚内存中的删除**：否则会出现「内存里已删、磁盘上还在」的不一致，
+    /// 用户看到「已删除」却在重启后发现模板复活（P1-5 的原始投诉）。
+    /// 回滚后内存与磁盘一致（都还在），界面如实提示失败即可。
+    /// </remarks>
     public bool DeleteTemplate(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -235,19 +252,36 @@ public sealed class TemplateManager
             return false;
         }
 
-        bool removed;
+        var trimmedName = name.Trim();
+        string? removedValue = null;
+
         lock (_gate)
         {
-            removed = _templates.Remove(name.Trim());
+            if (_templates.TryGetValue(trimmedName, out var existing))
+            {
+                removedValue = existing;
+                _templates.Remove(trimmedName);
+            }
         }
 
-        if (!removed)
+        if (removedValue is null)
         {
             return false;
         }
 
-        Persist();
-        _logger?.Info($"FolderCreator 模板已删除：{name.Trim()}");
+        if (!Persist())
+        {
+            // 回滚：内存恢复成「还没删」的状态，与磁盘保持一致
+            lock (_gate)
+            {
+                _templates[trimmedName] = removedValue;
+            }
+
+            _logger?.Error($"模板删除未能落盘，已在内存中回滚：{trimmedName}");
+            return false;
+        }
+
+        _logger?.Info($"模板已删除：{trimmedName}");
         return true;
     }
 
@@ -278,8 +312,14 @@ public sealed class TemplateManager
         // 这样用户下次打开就能在模板文件里看到并直接编辑它们。
         if (added > 0 || !Exists)
         {
-            Persist();
-            _logger?.Info($"FolderCreator 已写入内置模板（新增 {added} 个）：{FilePath}");
+            if (Persist())
+            {
+                _logger?.Info($"已写入内置模板（新增 {added} 个）：{FilePath}");
+            }
+            else
+            {
+                _logger?.Error($"内置模板未能写入磁盘：{FilePath}");
+            }
         }
 
         return added;
@@ -353,7 +393,12 @@ public sealed class TemplateManager
     }
 
     /// <summary>把当前模板写回磁盘（原子替换）。</summary>
-    private void Persist()
+    /// <returns>写盘成功返回 true；失败返回 false（并记录日志）。</returns>
+    /// <remarks>
+    /// 这里**不再吞掉异常后假装成功**：调用方（<c>SaveTemplate</c> / <c>DeleteTemplate</c>）
+    /// 依赖返回值给用户如实反馈。模板仍在内存中可用，所以失败不抛异常，避免拖垮 UI。
+    /// </remarks>
+    private bool Persist()
     {
         Dictionary<string, string> snapshot;
         lock (_gate)
@@ -370,11 +415,14 @@ public sealed class TemplateManager
 
             File.WriteAllText(tempFile, json, new UTF8Encoding(false));
             File.Move(tempFile, FilePath, overwrite: true);
+            return true;
         }
         catch (Exception ex)
         {
-            // 模板保存失败不应让调用方崩溃（模板仍在内存中可用）
+            // 模板保存失败不应让调用方崩溃（模板仍在内存中可用），但必须如实把失败传回去
             _logger?.Warn($"保存模板失败：{FilePath}", ex);
+            LastPersistError = ex;
+            return false;
         }
     }
 

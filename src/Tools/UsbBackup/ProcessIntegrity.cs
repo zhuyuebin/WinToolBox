@@ -3,6 +3,25 @@ using System.Runtime.InteropServices;
 namespace WinToolBox.Tools.UsbBackup;
 
 /// <summary>
+/// 进程完整性级别检测结果。
+/// </summary>
+internal enum IntegrityCheckResult
+{
+    /// <summary>中完整性或更高：托盘图标可以正常注册。</summary>
+    Normal,
+
+    /// <summary>低于中完整性（沙箱 / 受限终端）：Windows 会拒绝注册托盘图标。</summary>
+    Restricted,
+
+    /// <summary>
+    /// 无法确定完整性级别（API 失败、结构异常等）。
+    /// <para>旧实现把这种情况直接当成「正常」（fail-open），于是受限环境下用户什么提示都没有，
+    /// 只能自己猜「为什么进程在跑却没有图标」。现在单独成一态，由调用方给出可操作的提示。</para>
+    /// </summary>
+    Unknown
+}
+
+/// <summary>
 /// 进程完整性级别检测。
 /// </summary>
 /// <remarks>
@@ -20,23 +39,57 @@ internal static class ProcessIntegrity
     private const int MediumIntegrityRid = 0x2000;
 
     /// <summary>
-    /// 当前进程是否运行在受限上下文（低于中完整性，例如沙箱或受限终端）。
+    /// 由完整性 RID 判定三态（纯函数，便于单元测试覆盖「读不到」与「受限」两条分支）。
     /// </summary>
-    /// <param name="description">完整性级别的中文描述，用于提示用户。</param>
-    public static bool IsRestricted(out string description)
+    /// <param name="rid">完整性 RID；null 表示读取失败（未知）。</param>
+    /// <param name="description">完整性级别的中文描述。</param>
+    /// <param name="failureReason">返回 <see cref="IntegrityCheckResult.Unknown"/> 时的原因。</param>
+    public static IntegrityCheckResult Classify(int? rid, out string description, out string? failureReason)
     {
-        description = string.Empty;
+        failureReason = null;
 
-        var rid = GetCurrentProcessIntegrityRid();
         if (rid is null)
         {
-            // 读不到就不打扰用户，按正常处理
-            return false;
+            description = string.Empty;
+            failureReason = "读取进程完整性级别失败（原因未知）";
+            return IntegrityCheckResult.Unknown;
         }
 
         description = DescribeRid(rid.Value);
-        return rid.Value < MediumIntegrityRid;
+
+        return rid.Value < MediumIntegrityRid
+            ? IntegrityCheckResult.Restricted
+            : IntegrityCheckResult.Normal;
     }
+
+    /// <summary>
+    /// 检测当前进程的完整性级别（三态）。
+    /// </summary>
+    /// <param name="description">完整性级别的中文描述，用于提示用户。</param>
+    /// <param name="failureReason">返回 <see cref="IntegrityCheckResult.Unknown"/> 时的原因（含 Win32 错误码）。</param>
+    public static IntegrityCheckResult Check(out string description, out string? failureReason)
+    {
+        var rid = GetCurrentProcessIntegrityRid(out var error);
+        var result = Classify(rid, out description, out var classifyReason);
+
+        // 把真实的 P/Invoke 失败原因（含 Win32 错误码）带给调用方
+        failureReason = result == IntegrityCheckResult.Unknown
+            ? error ?? classifyReason
+            : null;
+
+        return result;
+    }
+
+    /// <summary>
+    /// 当前进程是否运行在受限上下文（低于中完整性，例如沙箱或受限终端）。
+    /// </summary>
+    /// <param name="description">完整性级别的中文描述，用于提示用户。</param>
+    /// <remarks>
+    /// 保留此便捷重载以兼容既有调用点；读不到完整性级别时返回 false（不打扰用户），
+    /// 需要区分「确定正常」与「读不到」时请改用 <see cref="Check"/>。
+    /// </remarks>
+    public static bool IsRestricted(out string description)
+        => Check(out description, out _) == IntegrityCheckResult.Restricted;
 
     private static string DescribeRid(int rid) => rid switch
     {
@@ -47,8 +100,12 @@ internal static class ProcessIntegrity
         _ => $"0x{rid:X}"
     };
 
-    private static int? GetCurrentProcessIntegrityRid()
+    /// <summary>
+    /// 读取当前进程完整性 RID；失败时通过 <paramref name="failureReason"/> 给出**含 Win32 错误码**的原因。
+    /// </summary>
+    private static int? GetCurrentProcessIntegrityRid(out string? failureReason)
     {
+        failureReason = null;
         var token = IntPtr.Zero;
         var buffer = IntPtr.Zero;
 
@@ -56,6 +113,7 @@ internal static class ProcessIntegrity
         {
             if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out token))
             {
+                failureReason = $"OpenProcessToken 失败（Win32 错误码 {Marshal.GetLastWin32Error()}）";
                 return null;
             }
 
@@ -64,12 +122,15 @@ internal static class ProcessIntegrity
             GetTokenInformation(token, TokenIntegrityLevel, IntPtr.Zero, 0, out var length);
             if (length <= 0)
             {
+                failureReason =
+                    $"GetTokenInformation 未能给出缓冲区长度（Win32 错误码 {Marshal.GetLastWin32Error()}）";
                 return null;
             }
 
             buffer = Marshal.AllocHGlobal(length);
             if (!GetTokenInformation(token, TokenIntegrityLevel, buffer, length, out _))
             {
+                failureReason = $"GetTokenInformation 失败（Win32 错误码 {Marshal.GetLastWin32Error()}）";
                 return null;
             }
 
@@ -77,19 +138,22 @@ internal static class ProcessIntegrity
             var sid = Marshal.ReadIntPtr(buffer);
             if (sid == IntPtr.Zero)
             {
+                failureReason = "TOKEN_MANDATORY_LABEL 的 SID 指针为空";
                 return null;
             }
 
             var subAuthorityCount = Marshal.ReadByte(sid, 1);
             if (subAuthorityCount == 0)
             {
+                failureReason = "完整性 SID 的子认证值数量为 0";
                 return null;
             }
 
             return Marshal.ReadInt32(sid, 8 + ((subAuthorityCount - 1) * 4));
         }
-        catch
+        catch (Exception ex)
         {
+            failureReason = $"读取完整性级别时发生异常：{ex.GetType().Name} {ex.Message}";
             return null;
         }
         finally

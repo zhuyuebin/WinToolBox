@@ -132,9 +132,23 @@ public sealed class EmptyFolderCleanerService
                     // 已被父目录一起删除，视为成功
                     items.Add(new EmptyFolderDeleteItem { Path = directory, Success = true });
                 }
+                else if (!IsEmptyDirectory(directory))
+                {
+                    // 关键安全复查：扫描之后目录里可能被放进了文件（或子目录变非空）。
+                    // 此时绝不删除，改为「跳过」，避免把后来出现的数据一起删掉。
+                    var reason = "删除前复查发现该目录已不再为空，已跳过以避免删除其中的文件。";
+                    items.Add(new EmptyFolderDeleteItem
+                    {
+                        Path = directory,
+                        Success = true,
+                        Skipped = true,
+                        SkipReason = reason
+                    });
+                    _logger?.Warn($"跳过后删目录（已不再为空）：{directory}");
+                }
                 else
                 {
-                    SafeDelete.DeleteDirectory(directory, useRecycleBin);
+                    SafeDelete.DeleteEmptyDirectory(directory, useRecycleBin);
                     items.Add(new EmptyFolderDeleteItem { Path = directory, Success = true });
                     _logger?.Info($"已删除空目录：{directory}（回收站={useRecycleBin}）");
                 }

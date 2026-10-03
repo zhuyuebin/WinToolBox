@@ -146,6 +146,13 @@ public sealed class SyncResultItem
 
     /// <summary>失败原因（成功时为 null）。</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// 是否被【有意跳过】（没有执行，也不是失败）。
+    /// <para>最典型的情况：复制阶段出现失败时，为免目标比同步前更少而整体跳过删除。</para>
+    /// <para>跳过的项不计入 <see cref="SyncResult.FailedCount"/>，否则界面会把「保护性跳过」显示成失败。</para>
+    /// </summary>
+    public bool Skipped { get; init; }
 }
 
 /// <summary>同步执行结果。</summary>
@@ -164,14 +171,18 @@ public sealed class SyncResult
     /// <summary>成功数量。</summary>
     public int SucceededCount => Items.Count(static item => item.Success);
 
-    /// <summary>失败数量。</summary>
-    public int FailedCount => Items.Count(static item => !item.Success);
+    /// <summary>被有意跳过（例如复制失败时保护性跳过删除）的数量。</summary>
+    public int SkippedCount => Items.Count(static item => item.Skipped);
 
-    /// <summary>是否全部成功。</summary>
+    /// <summary>失败数量（不含被有意跳过的项）。</summary>
+    public int FailedCount => Items.Count(static item => !item.Success && !item.Skipped);
+
+    /// <summary>是否没有失败项（被跳过的项不算失败，但会在摘要里单独说明）。</summary>
     public bool Success => FailedCount == 0;
 
     /// <summary>一句话摘要。</summary>
     public string Summary =>
         $"同步完成：成功 {SucceededCount} 项（复制 {DuplicateScanResult.FormatSize(CopiedBytes)}，" +
-        $"删除文件 {DeletedFileCount} 个），失败 {FailedCount} 项。";
+        $"删除文件 {DeletedFileCount} 个），失败 {FailedCount} 项" +
+        (SkippedCount > 0 ? $"，跳过 {SkippedCount} 项（因复制失败已跳过删除）。" : "。");
 }

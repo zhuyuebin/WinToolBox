@@ -31,6 +31,12 @@ partial class MainForm
 
     private Label lblExcludeHint = null!;
 
+    private Label lblHistory = null!;
+
+    private ComboBox cboHistoryRetention = null!;
+
+    private Label lblHistoryHint = null!;
+
     private Button btnSave = null!;
 
     // ---------- 操作 ----------
@@ -39,6 +45,9 @@ partial class MainForm
     private Button btnBackup = null!;
 
     private Button btnRefresh = null!;
+
+    /// <summary>「取消备份」按钮（仅在备份进行中可用）。</summary>
+    private Button btnCancelBackup = null!;
 
     private Button btnOpenLog = null!;
 
@@ -73,10 +82,14 @@ partial class MainForm
         this.lblExclude = new Label();
         this.txtExclude = new TextBox();
         this.lblExcludeHint = new Label();
+        this.lblHistory = new Label();
+        this.cboHistoryRetention = new ComboBox();
+        this.lblHistoryHint = new Label();
         this.btnSave = new Button();
         this.grpActions = new GroupBox();
         this.btnBackup = new Button();
         this.btnRefresh = new Button();
+        this.btnCancelBackup = new Button();
         this.btnOpenLog = new Button();
         this.btnHide = new Button();
         this.btnExit = new Button();
@@ -100,13 +113,16 @@ partial class MainForm
         this.grpSettings.Controls.Add(this.lblExclude);
         this.grpSettings.Controls.Add(this.txtExclude);
         this.grpSettings.Controls.Add(this.lblExcludeHint);
+        this.grpSettings.Controls.Add(this.lblHistory);
+        this.grpSettings.Controls.Add(this.cboHistoryRetention);
+        this.grpSettings.Controls.Add(this.lblHistoryHint);
         this.grpSettings.Controls.Add(this.btnSave);
         this.grpSettings.Location = new Point(12, 12);
         this.grpSettings.Name = "grpSettings";
-        this.grpSettings.Size = new Size(856, 116);
+        this.grpSettings.Size = new Size(856, 152);
         this.grpSettings.TabIndex = 0;
         this.grpSettings.TabStop = false;
-        this.grpSettings.Text = "备份设置";
+        this.grpSettings.Text = "备份设置（增量备份 + 版本历史）";
 
         this.lblTarget.AutoSize = true;
         this.lblTarget.Location = new Point(16, 33);
@@ -147,11 +163,32 @@ partial class MainForm
         this.lblExcludeHint.TabIndex = 6;
         this.lblExcludeHint.Text = "（逗号分隔，如 .tmp,.part）";
 
+        // ---------- 第 3 行：版本历史保留策略 ----------
+        this.lblHistory.AutoSize = true;
+        this.lblHistory.Location = new Point(16, 108);
+        this.lblHistory.Name = "lblHistory";
+        this.lblHistory.TabIndex = 8;
+        this.lblHistory.Text = "历史版本保留：";
+
+        this.cboHistoryRetention.DropDownStyle = ComboBoxStyle.DropDownList;
+        this.cboHistoryRetention.Location = new Point(130, 105);
+        this.cboHistoryRetention.Name = "cboHistoryRetention";
+        this.cboHistoryRetention.Size = new Size(160, 25);
+        this.cboHistoryRetention.TabIndex = 9;
+        this.cboHistoryRetention.SelectedIndexChanged += new System.EventHandler(this.OnHistoryRetentionChanged);
+
+        this.lblHistoryHint.AutoSize = true;
+        this.lblHistoryHint.ForeColor = SystemColors.GrayText;
+        this.lblHistoryHint.Location = new Point(302, 108);
+        this.lblHistoryHint.Name = "lblHistoryHint";
+        this.lblHistoryHint.TabIndex = 10;
+        this.lblHistoryHint.Text = "被删除 / 被覆盖的旧版本会保留在 history 目录中。";
+
         this.btnSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        this.btnSave.Location = new Point(750, 65);
+        this.btnSave.Location = new Point(750, 104);
         this.btnSave.Name = "btnSave";
         this.btnSave.Size = new Size(90, 27);
-        this.btnSave.TabIndex = 7;
+        this.btnSave.TabIndex = 11;
         this.btnSave.Text = "保存设置";
         this.btnSave.UseVisualStyleBackColor = true;
         this.btnSave.Click += new System.EventHandler(this.OnSaveClick);
@@ -160,11 +197,12 @@ partial class MainForm
         this.grpActions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         this.grpActions.Controls.Add(this.btnBackup);
         this.grpActions.Controls.Add(this.btnRefresh);
+        this.grpActions.Controls.Add(this.btnCancelBackup);
         this.grpActions.Controls.Add(this.btnOpenLog);
         this.grpActions.Controls.Add(this.btnHide);
         this.grpActions.Controls.Add(this.btnExit);
         this.grpActions.Controls.Add(this.lblDevices);
-        this.grpActions.Location = new Point(12, 150);
+        this.grpActions.Location = new Point(12, 186);
         this.grpActions.Name = "grpActions";
         this.grpActions.Size = new Size(856, 78);
         this.grpActions.TabIndex = 1;
@@ -187,36 +225,46 @@ partial class MainForm
         this.btnRefresh.UseVisualStyleBackColor = true;
         this.btnRefresh.Click += new System.EventHandler(this.OnRefreshClick);
 
-        this.btnOpenLog.Location = new Point(296, 28);
+        // P1-7：备份期间才可用的「取消备份」
+        this.btnCancelBackup.Enabled = false;
+        this.btnCancelBackup.Location = new Point(296, 28);
+        this.btnCancelBackup.Name = "btnCancelBackup";
+        this.btnCancelBackup.Size = new Size(120, 36);
+        this.btnCancelBackup.TabIndex = 2;
+        this.btnCancelBackup.Text = "取消备份";
+        this.btnCancelBackup.UseVisualStyleBackColor = true;
+        this.btnCancelBackup.Click += new System.EventHandler(this.OnCancelBackupClick);
+
+        this.btnOpenLog.Location = new Point(426, 28);
         this.btnOpenLog.Name = "btnOpenLog";
         this.btnOpenLog.Size = new Size(140, 36);
-        this.btnOpenLog.TabIndex = 2;
+        this.btnOpenLog.TabIndex = 3;
         this.btnOpenLog.Text = "打开日志目录";
         this.btnOpenLog.UseVisualStyleBackColor = true;
         this.btnOpenLog.Click += new System.EventHandler(this.OnOpenLogClick);
 
-        this.btnHide.Location = new Point(446, 28);
+        this.btnHide.Location = new Point(576, 28);
         this.btnHide.Name = "btnHide";
-        this.btnHide.Size = new Size(130, 36);
-        this.btnHide.TabIndex = 3;
+        this.btnHide.Size = new Size(120, 36);
+        this.btnHide.TabIndex = 4;
         this.btnHide.Text = "隐藏到托盘";
         this.btnHide.UseVisualStyleBackColor = true;
         this.btnHide.Click += new System.EventHandler(this.OnHideClick);
 
-        this.btnExit.Location = new Point(586, 28);
+        this.btnExit.Location = new Point(706, 28);
         this.btnExit.Name = "btnExit";
         this.btnExit.Size = new Size(120, 36);
-        this.btnExit.TabIndex = 4;
+        this.btnExit.TabIndex = 5;
         this.btnExit.Text = "退出程序";
         this.btnExit.UseVisualStyleBackColor = true;
         this.btnExit.Click += new System.EventHandler(this.OnExitClick);
 
         this.lblDevices.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         this.lblDevices.AutoSize = false;
-        this.lblDevices.Location = new Point(720, 38);
+        this.lblDevices.Location = new Point(720, 8);
         this.lblDevices.Name = "lblDevices";
-        this.lblDevices.Size = new Size(130, 22);
-        this.lblDevices.TabIndex = 5;
+        this.lblDevices.Size = new Size(130, 18);
+        this.lblDevices.TabIndex = 6;
         this.lblDevices.Text = "设备：0 个";
         this.lblDevices.TextAlign = ContentAlignment.MiddleLeft;
 
@@ -224,9 +272,9 @@ partial class MainForm
         this.grpLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         this.grpLog.Controls.Add(this.btnClearLog);
         this.grpLog.Controls.Add(this.txtLog);
-        this.grpLog.Location = new Point(12, 238);
+        this.grpLog.Location = new Point(12, 274);
         this.grpLog.Name = "grpLog";
-        this.grpLog.Size = new Size(856, 330);
+        this.grpLog.Size = new Size(856, 294);
         this.grpLog.TabIndex = 2;
         this.grpLog.TabStop = false;
         this.grpLog.Text = "运行日志";

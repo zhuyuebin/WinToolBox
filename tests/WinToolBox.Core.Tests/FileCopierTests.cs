@@ -103,16 +103,19 @@ public sealed class FileCopierTests
 
         var second = copier.CopyDirectory(ws.SourceDir, ws.TargetDir);
 
-        // 第二次复制：大小相同且目标时间不早于源时间 → 全部跳过
+        // 第二次复制：大小相同、内容经 SHA256 校验一致 → 全部跳过并标记为「已校验」
         Assert.Equal(0, second.CopiedFiles);
         Assert.Equal(2, second.SkippedFiles);
+        Assert.Equal(2, second.VerifiedFiles);
+        Assert.Equal(0, second.UnchangedAssumed);
         Assert.Equal(0, second.FailedFiles);
         Assert.Equal(0, second.CopiedBytes);
         Assert.Equal(hashBefore, TempWorkspace.ComputeFileSha256(Path.Combine(ws.TargetDir, "a.txt")));
+        Assert.Contains("已 SHA256 校验", second.Summary);
     }
 
     [Fact]
-    public void CopyDirectory_RecopiesOnlyUpdatedFile_WhenSourceTimestampIsNewer()
+    public void CopyDirectory_RecopiesOnlyUpdatedFile_WhenSourceContentChanged()
     {
         using var ws = new TempWorkspace();
         var sourceA = ws.CreateFile("a.txt", "content-a", BaseTimeUtc);
@@ -125,7 +128,8 @@ public sealed class FileCopierTests
         var targetB = Path.Combine(ws.TargetDir, "b.txt");
         var bTimeBefore = File.GetLastWriteTimeUtc(targetB);
 
-        // 让 a.txt 在源目录“看起来更新”
+        // a.txt 内容被改写（长度保持不变），并把源时间设成「更新」
+        File.WriteAllText(sourceA, "content-A");
         File.SetLastWriteTimeUtc(sourceA, DateTime.UtcNow.AddMinutes(5));
 
         var second = copier.CopyDirectory(ws.SourceDir, ws.TargetDir);
@@ -133,9 +137,28 @@ public sealed class FileCopierTests
         // 只重拷 a.txt，b.txt 被跳过
         Assert.Equal(1, second.CopiedFiles);
         Assert.Equal(1, second.SkippedFiles);
-        Assert.Equal("content-a", TempWorkspace.ReadAllText(targetA));
+        Assert.Equal("content-A", TempWorkspace.ReadAllText(targetA));
         Assert.Equal(File.GetLastWriteTimeUtc(sourceA), File.GetLastWriteTimeUtc(targetA));
         Assert.Equal(bTimeBefore, File.GetLastWriteTimeUtc(targetB));
+    }
+
+    [Fact]
+    public void CopyDirectory_SkipsTimestampOnlyChange_WhenContentIsIdentical()
+    {
+        using var ws = new TempWorkspace();
+        var sourceA = ws.CreateFile("a.txt", "content-a", BaseTimeUtc);
+
+        var copier = new FileCopier();
+        Assert.Equal(1, copier.CopyDirectory(ws.SourceDir, ws.TargetDir).CopiedFiles);
+
+        // 只把源文件时间改新，内容一字未动 → 内容校验一致，不应重拷
+        File.SetLastWriteTimeUtc(sourceA, DateTime.UtcNow.AddMinutes(5));
+
+        var second = copier.CopyDirectory(ws.SourceDir, ws.TargetDir);
+
+        Assert.Equal(0, second.CopiedFiles);
+        Assert.Equal(1, second.SkippedFiles);
+        Assert.Equal(1, second.VerifiedFiles);
     }
 
     [Fact]
@@ -164,7 +187,7 @@ public sealed class FileCopierTests
     }
 
     [Fact]
-    public void CopyDirectory_OverwritesOlderTarget_WhenSourceIsNewerAndSizeEqual()
+    public void CopyDirectory_OverwritesTarget_WhenContentDiffersEvenIfTargetIsNewer()
     {
         using var ws = new TempWorkspace();
         var sourceFile = ws.CreateFile("same.txt", "OLDOLDOLD", BaseTimeUtc);
@@ -174,15 +197,25 @@ public sealed class FileCopierTests
 
         Assert.Equal(9, new FileInfo(targetFile).Length);
 
-        // 源更旧 + 大小相同 → 无需复制
-        Assert.Equal(0, new FileCopier().CopyDirectory(ws.SourceDir, ws.TargetDir).CopiedFiles);
-
-        // 源变新（大小仍相同）→ 覆盖
-        File.SetLastWriteTimeUtc(sourceFile, DateTime.UtcNow.AddHours(1));
-        var result = new FileCopier().CopyDirectory(ws.SourceDir, ws.TargetDir);
-
-        Assert.Equal(1, result.CopiedFiles);
+        // 大小相同、内容不同、目标时间更新 —— 这正是旧实现会永久静默跳过的场景。
+        // 修复后必须重拷，否则用户的改写永远到不了备份里。
+        var first = new FileCopier().CopyDirectory(ws.SourceDir, ws.TargetDir);
+        Assert.Equal(1, first.CopiedFiles);
+        Assert.Equal(0, first.SkippedFiles);
         Assert.Equal("OLDOLDOLD", TempWorkspace.ReadAllText(targetFile));
+
+        // 内容已经一致，再跑一次：源时间比目标新，但内容校验通过 → 不重拷
+        var second = new FileCopier().CopyDirectory(ws.SourceDir, ws.TargetDir);
+        Assert.Equal(0, second.CopiedFiles);
+        Assert.Equal(1, second.SkippedFiles);
+        Assert.Equal(1, second.VerifiedFiles);
+        Assert.Equal("OLDOLDOLD", TempWorkspace.ReadAllText(targetFile));
+
+        // 源内容再变（长度仍相同）→ 必须再次覆盖
+        File.WriteAllText(sourceFile, "NEWER-YES");
+        var third = new FileCopier().CopyDirectory(ws.SourceDir, ws.TargetDir);
+        Assert.Equal(1, third.CopiedFiles);
+        Assert.Equal("NEWER-YES", TempWorkspace.ReadAllText(targetFile));
     }
 
     [Fact]

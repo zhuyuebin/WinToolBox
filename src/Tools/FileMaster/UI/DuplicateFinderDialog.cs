@@ -214,6 +214,56 @@ public sealed class DuplicateFinderDialog : FeatureDialogBase
 
         _txtDirectories.SelectionStart = _txtDirectories.TextLength;
         AppendLog($"已添加扫描目录：{selected}");
+
+        AppendMergeHint(selected);
+    }
+
+    /// <summary>
+    /// 提示新添加的目录与已在列表中的目录之间的包含关系：递归扫描时子目录会被父目录自动合并，
+    /// 避免用户以为同一批文件会被统计两次（否则会出现「自己和自己重复」的假重复组）。
+    /// </summary>
+    /// <param name="added">刚添加的目录。</param>
+    private void AppendMergeHint(string added)
+    {
+        var others = _txtDirectories.Text
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(static line => line.Trim())
+            .Where(line => line.Length > 0 && !string.Equals(line, added, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (others.Count == 0)
+        {
+            return;
+        }
+
+        // 只扫顶层时父子目录互不覆盖（父目录扫不到子目录里的文件），两者会各自保留
+        if (!_chkIncludeSubDirectories.Checked)
+        {
+            var overlapping = others.FirstOrDefault(other =>
+                DuplicateFinderService.IsSameOrSubPathOf(added, other) ||
+                DuplicateFinderService.IsSameOrSubPathOf(other, added));
+
+            if (overlapping is not null)
+            {
+                AppendLog(
+                    $"提示：当前未勾选「包含子目录」，{added} 与「{overlapping}」会各自只扫描顶层文件，不会互相覆盖。");
+            }
+
+            return;
+        }
+
+        var parent = others.FirstOrDefault(other => DuplicateFinderService.IsSameOrSubPathOf(added, other));
+        if (parent is not null)
+        {
+            AppendLog($"提示：{added} 已被「{parent}」包含，扫描时会自动合并，同一批文件不会重复统计。");
+            return;
+        }
+
+        var children = others.Where(other => DuplicateFinderService.IsSameOrSubPathOf(other, added)).ToList();
+        if (children.Count > 0)
+        {
+            AppendLog($"提示：已添加的目录已被 {added} 包含，扫描时会自动合并：{string.Join("、", children)}");
+        }
     }
 
     /// <summary>
@@ -358,6 +408,13 @@ public sealed class DuplicateFinderDialog : FeatureDialogBase
 
         SetStatus(result.Summary);
         AppendLog(result.Summary);
+
+        if (result.MergedDirectories.Count > 0)
+        {
+            AppendLog(
+                $"已自动合并 {result.MergedDirectories.Count} 个扫描目录（等价的写法或被父目录包含），未重复统计：" +
+                string.Join("、", result.MergedDirectories));
+        }
 
         if (result.Groups.Count == 0)
         {

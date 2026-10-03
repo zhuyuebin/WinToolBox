@@ -87,13 +87,31 @@ public sealed class FileLockQueryResult
     /// <summary>是否为目录查询。</summary>
     public bool IsDirectory { get; init; }
 
-    /// <summary>参与查询的文件数量（目录查询时是目录内文件数）。</summary>
+    /// <summary>参与查询的文件数量（目录查询时最多为 <see cref="FileUnlockerService.MaxFilesPerQuery"/> 个）。</summary>
     public int ScannedFileCount { get; init; }
+
+    /// <summary>
+    /// 目录内的实际文件总数，不做单次查询上限截断（单个文件查询时为 1，目录为空时为 0）。
+    /// 目录枚举中途失败时该值是已经数到的数量（下限），此时 <see cref="Truncated"/> 为 true。
+    /// </summary>
+    public int TotalFileCount { get; init; }
+
+    /// <summary>
+    /// 查询结果是否不完整：目录内文件数超过单次查询上限（<see cref="FileUnlockerService.MaxFilesPerQuery"/> 个），
+    /// 或目录枚举中途失败（权限不足等）。
+    /// 为 true 时 <see cref="Summary"/> 必须写明「结果不完整」，绝不输出「没有被任何进程占用」这种确定性结论。
+    /// </summary>
+    public bool Truncated { get; init; }
 
     /// <summary>占用进程数量。</summary>
     public int LockCount => Processes.Count;
 
     /// <summary>一句话摘要。</summary>
+    /// <remarks>
+    /// 「没有发现占用」只能代表「已检查的这部分文件」没有发现占用：
+    /// 结果不完整（<see cref="Truncated"/>）时必须一并说明检查了多少、目录里共有多少文件，
+    /// 否则用户会把「没查完」误读成「没有任何进程占用」。
+    /// </remarks>
     public string Summary
     {
         get
@@ -106,6 +124,15 @@ public sealed class FileLockQueryResult
             if (!PathExists)
             {
                 return "路径不存在：" + Path;
+            }
+
+            if (Truncated)
+            {
+                return LockCount == 0
+                    ? $"已检查前 {ScannedFileCount} 个文件，未发现占用（该目录共 {TotalFileCount} 个文件，结果不完整）。"
+                    : $"被 {LockCount} 个进程占用：" +
+                      string.Join("、", Processes.Select(static p => $"{p.DisplayName}({p.ProcessId})")) +
+                      $"（该目录共 {TotalFileCount} 个文件，仅检查前 {ScannedFileCount} 个，结果不完整）。";
             }
 
             return LockCount == 0

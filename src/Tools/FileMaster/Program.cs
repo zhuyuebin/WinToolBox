@@ -43,10 +43,14 @@ internal static class Program
         {
             var reportPath = GetSwitchValue(args, "--selftest")
                              ?? Path.Combine(Path.GetTempPath(), "FileMaster-selftest.txt");
-            return RunSelfTest(reportPath);
+
+            // P1-4：自检也必须写 FileMaster 专属日志目录（此前用了共享目录 Logger.Instance）
+            return RunSelfTest(reportPath, Logger.ForTool("FileMaster"));
         }
 
-        var logger = Logger.Instance;
+        // P1-4：写工具专属日志目录（%LocalAppData%\WinToolBox\logs\FileMaster\），
+        // 避免与 UsbBackup 混在同一个文件里，也避免两边的保留期清理互相干扰。
+        var logger = Logger.ForTool("FileMaster");
 
         // 一次性迁移：把旧版 %AppData%\WinToolBox\FolderCreator\templates.json 复制到 FileMaster 目录
         TemplateManager.MigrateLegacyTemplates(logger);
@@ -126,7 +130,7 @@ internal static class Program
     /// 本机冒烟自检：在临时目录里跑一遍“解析规则 → 生成目录 → 重复生成（应全部跳过）→ 严格/宽松检查”，
     /// 不依赖任何真实数据，用于验证程序可正常运行。
     /// </summary>
-    private static int RunSelfTest(string reportPath)
+    private static int RunSelfTest(string reportPath, Logger logger)
     {
         var report = new StringBuilder();
         var passed = 0;
@@ -151,7 +155,7 @@ internal static class Program
         report.AppendLine("FileMaster 本机冒烟自检报告");
         report.AppendLine($"时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         report.AppendLine($"程序版本：{GetVersion()}");
-        report.AppendLine($"日志目录：{Logger.Instance.LogDirectory}");
+        report.AppendLine($"日志目录：{logger.LogDirectory}");
         report.AppendLine($"工作目录：{workRoot}");
         report.AppendLine("========================================");
 
@@ -258,8 +262,8 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            // 报告写不出来不影响退出码，但尽量留下痕迹
-            Logger.Instance.Warn($"写入自检报告失败：{reportPath}", ex);
+            // 报告写不出来不影响退出码，但尽量留下痕迹（写工具专属日志目录）
+            logger.Warn($"写入自检报告失败：{reportPath}", ex);
         }
 
         return exitCode;

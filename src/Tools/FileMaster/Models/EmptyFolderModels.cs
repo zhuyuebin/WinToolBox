@@ -74,6 +74,19 @@ public sealed class EmptyFolderDeleteItem
 
     /// <summary>失败原因（成功时为 null）。</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// 是否被跳过（没有删除）。
+    /// <para>最典型的情况：扫描之后有人在目录里放了文件，删除前重新判空发现它已经不再为空，
+    /// 此时保守地跳过而不是删掉里面的文件。</para>
+    /// </summary>
+    public bool Skipped { get; init; }
+
+    /// <summary>被跳过时的原因。</summary>
+    public string? SkipReason { get; init; }
+
+    /// <summary>真正被删除（或被父目录一并删除）的条目。</summary>
+    public bool Deleted => Success && !Skipped;
 }
 
 /// <summary>删除结果。</summary>
@@ -85,16 +98,20 @@ public sealed class EmptyFolderDeleteResult
     /// <summary>是否走回收站。</summary>
     public bool UsedRecycleBin { get; init; } = true;
 
-    /// <summary>成功数量。</summary>
-    public int DeletedCount => Items.Count(static item => item.Success);
+    /// <summary>成功删除数量（不含被跳过的条目）。</summary>
+    public int DeletedCount => Items.Count(static item => item.Deleted);
 
     /// <summary>失败数量。</summary>
     public int FailedCount => Items.Count(static item => !item.Success);
 
-    /// <summary>是否全部成功。</summary>
+    /// <summary>因「删除前复查发现已不再为空」而跳过的数量。</summary>
+    public int SkippedCount => Items.Count(static item => item.Skipped);
+
+    /// <summary>是否没有失败（被跳过不算失败，但会在摘要中单独列出）。</summary>
     public bool Success => FailedCount == 0;
 
     /// <summary>一句话摘要。</summary>
     public string Summary =>
-        $"清理完成：成功 {DeletedCount} 个{(UsedRecycleBin ? "（已放入回收站）" : "（已永久删除）")}，失败 {FailedCount} 个。";
+        $"清理完成：成功 {DeletedCount} 个{(UsedRecycleBin ? "（已放入回收站）" : "（已永久删除）")}，失败 {FailedCount} 个" +
+        (SkippedCount > 0 ? $"，跳过 {SkippedCount} 个（删除前复查发现已不再为空）。" : "。");
 }

@@ -42,6 +42,9 @@ public sealed class FileUnlockerDialog : FeatureDialogBase
     /// <summary>最近一次查询结果（供「仅查看（复制信息）」使用；从未查询时为 null）。</summary>
     private FileLockQueryResult? _lastResult;
 
+    /// <summary>「结果不完整」警告标签（仅在查询被截断时显示，避免用户把「没查完」误读成「没有被占用」）。</summary>
+    private readonly Label _lblTruncatedWarning;
+
     /// <summary>创建「文件占用解锁」窗口。</summary>
     /// <param name="logger">日志记录器（可为 null）。</param>
     public FileUnlockerDialog(Logger? logger)
@@ -73,6 +76,18 @@ public sealed class FileUnlockerDialog : FeatureDialogBase
             ForeColor = Color.DimGray
         };
         AddCell(rowHint, lblHint, 0);
+
+        // ---------- 第 3 行：结果不完整警告（截断时用警告色显示；未截断时整行隐藏） ----------
+        var rowTruncated = AddInputRow(-100);
+
+        _lblTruncatedWarning = new Label
+        {
+            AutoSize = true,
+            ForeColor = Color.Firebrick,
+            Visible = false,
+            Margin = new Padding(0)
+        };
+        AddCell(rowTruncated, _lblTruncatedWarning, 0);
 
         // ---------- 预览列表：一行为一个占用进程 ----------
         // 打开复选框：勾选要结束的进程（未勾选任何行时退回到「选中的行」，见 CollectSelectedProcesses）
@@ -255,10 +270,37 @@ public sealed class FileUnlockerDialog : FeatureDialogBase
         AppendLog(result.Summary);
         SetCountText($"占用进程 {result.Processes.Count} 个");
 
+        UpdateTruncationWarning(result);
+
         if (!string.IsNullOrEmpty(result.Error))
         {
             ShowWarning("占用查询未完全成功：" + Environment.NewLine + result.Error);
         }
+    }
+
+    /// <summary>
+    /// 查询被截断（目录文件过多或部分内容无法枚举）时，用警告色说明「已检查多少 / 共多少，结果不完整」；
+    /// 结果完整时隐藏该提示，避免把「没查完」当成「没有任何进程占用」。
+    /// </summary>
+    /// <param name="result">查询结果。</param>
+    private void UpdateTruncationWarning(FileLockQueryResult result)
+    {
+        if (!result.Truncated)
+        {
+            _lblTruncatedWarning.Text = string.Empty;
+            _lblTruncatedWarning.Visible = false;
+            return;
+        }
+
+        var text =
+            $"已检查 {result.ScannedFileCount} / 共 {result.TotalFileCount} 个文件，结果不完整：" +
+            $"目录内文件数超过单次查询上限（{FileUnlockerService.MaxFilesPerQuery} 个）或部分子目录无法枚举，" +
+            "请对剩余文件或子目录单独查询。";
+
+        _lblTruncatedWarning.Text = text;
+        _lblTruncatedWarning.Visible = true;
+
+        AppendLog("警告：" + text);
     }
 
     // ---------------------------------------------------------------- 结束进程

@@ -50,6 +50,12 @@ public partial class MainForm : Form
     /// <summary>“立即备份”是否正在执行，防止重复提交后台任务。</summary>
     private bool _backupRunning;
 
+    /// <summary>当前备份的取消源（每次备份创建；用于「取消备份」按钮）。</summary>
+    private CancellationTokenSource? _backupCts;
+
+    /// <summary>是否已经就“备份中关闭窗口”提示过一次。</summary>
+    private bool _exitInterruptNoticeShown;
+
     /// <summary>日志框当前行数（裁剪判断用）。</summary>
     private int _logLineCount;
 
@@ -185,7 +191,62 @@ public partial class MainForm : Form
 
         // 配置文件里 excludedExtensions 为 null 时 string.Join 会抛异常，这里补一个空列表
         txtExclude.Text = string.Join(", ", config.ExcludedExtensions ?? new List<string>());
+
+        LoadHistoryRetentionChoices(config.HistoryRetentionDays);
     }
+
+    /// <summary>把「7 / 30 / 90 / 永久」填进下拉框并选中当前配置值。</summary>
+    /// <param name="retentionDays">当前配置的保留天数；0 表示永久。</param>
+    private void LoadHistoryRetentionChoices(int retentionDays)
+    {
+        cboHistoryRetention.Items.Clear();
+
+        foreach (var days in BackupConfig.HistoryRetentionChoices)
+        {
+            cboHistoryRetention.Items.Add(DescribeRetention(days));
+        }
+
+        var index = Array.IndexOf(BackupConfig.HistoryRetentionChoices, retentionDays);
+        cboHistoryRetention.SelectedIndex = index >= 0 ? index : 1;   // 默认 30 天
+
+        UpdateHistoryRetentionHint();
+    }
+
+    /// <summary>把保留天数描述成界面文案。</summary>
+    /// <param name="days">保留天数；0 表示永久。</param>
+    private static string DescribeRetention(int days)
+        => days <= BackupConfig.HistoryRetentionForever ? "永久保留（不自动清理）" : $"{days} 天";
+
+    /// <summary>下拉框当前选中的保留天数（0 表示永久）。</summary>
+    private int SelectedHistoryRetentionDays
+    {
+        get
+        {
+            var index = cboHistoryRetention.SelectedIndex;
+            var choices = BackupConfig.HistoryRetentionChoices;
+            return index >= 0 && index < choices.Length ? choices[index] : BackupConfig.DefaultHistoryRetentionDays;
+        }
+    }
+
+    /// <summary>
+    /// 选到「永久保留」时把提示改成红字风险警告（磁盘会持续增长）。
+    /// </summary>
+    private void UpdateHistoryRetentionHint()
+    {
+        if (SelectedHistoryRetentionDays <= BackupConfig.HistoryRetentionForever)
+        {
+            lblHistoryHint.ForeColor = Color.Firebrick;
+            lblHistoryHint.Text = "⚠ 永久保留：history 目录不会自动清理，磁盘占用会持续增长，请确保备份盘容量充足。";
+        }
+        else
+        {
+            lblHistoryHint.ForeColor = SystemColors.GrayText;
+            lblHistoryHint.Text = "被删除 / 被覆盖的旧版本会保留在 history 目录中。";
+        }
+    }
+
+    /// <summary>保留策略变化时刷新风险提示。</summary>
+    private void OnHistoryRetentionChanged(object? sender, EventArgs e) => UpdateHistoryRetentionHint();
 
     /// <summary>
     /// 把当天日志文件末尾最多 <see cref="MaxLogTailLines"/> 行读进日志框，
@@ -380,6 +441,13 @@ public partial class MainForm : Form
 
             if (!_allowClose && !forceClose)
             {
+                // P1-6.4：正在备份时，明确告诉用户「退出将中断备份」
+                if (_backupRunning && !_exitInterruptNoticeShown)
+                {
+                    _exitInterruptNoticeShown = true;
+                    ShowNotification("UsbBackup", "正在备份，退出将中断备份。可在主界面点「取消备份」安全停止。");
+                }
+
                 e.Cancel = true;
                 Hide();
 
@@ -454,6 +522,7 @@ public partial class MainForm : Form
             var config = _configManager.Load();
             config.BackupTargetDirectory = target;
             config.ExcludedExtensions = ParseExtensions(txtExclude.Text);
+            config.HistoryRetentionDays = SelectedHistoryRetentionDays;
             config.Normalize();
 
             _configManager.Save(config);
@@ -461,10 +530,13 @@ public partial class MainForm : Form
             // 把规范化后的结果回填界面，让用户看到真正生效的值
             txtTarget.Text = config.BackupTargetDirectory;
             txtExclude.Text = string.Join(", ", config.ExcludedExtensions);
+            LoadHistoryRetentionChoices(config.HistoryRetentionDays);
 
             _logger.Info(
                 $"设置已保存：目标目录={config.BackupTargetDirectory}，" +
-                $"排除后缀={string.Join(",", config.ExcludedExtensions)}");
+                $"排除后缀={string.Join(",", config.ExcludedExtensions)}，" +
+                $"历史保留={(config.KeepsHistoryForever ? "永久" : config.HistoryRetentionDays + " 天")}，" +
+                $"严格内容校验={config.StrictContentVerification}");
 
             SetStatus("设置已保存");
 
@@ -495,15 +567,22 @@ public partial class MainForm : Form
 
         _backupRunning = true;
         btnBackup.Enabled = false;
+
+        // P1-7：备份期间启用「取消备份」入口，并把令牌一路传到文件 I/O
+        _backupCts = new CancellationTokenSource();
+        btnCancelBackup.Enabled = true;
+
         UseWaitCursor = true;
-        SetStatus("正在备份…");
+        SetStatus("正在备份…（可点「取消备份」安全停止）");
 
         try
         {
             _logger.Info("用户在主界面点击「立即备份」，开始备份所有已插入的 U 盘。");
 
+            var token = _backupCts.Token;
+
             // BackupAllAttached 是同步阻塞实现，必须放到后台线程，否则界面会假死
-            var outcomes = await Task.Run(() => _backupService.BackupAllAttached(CancellationToken.None));
+            var outcomes = await Task.Run(() => _backupService.BackupAllAttached(token));
 
             if (_disposed || IsDisposed)
             {
@@ -555,11 +634,45 @@ public partial class MainForm : Form
         {
             _backupRunning = false;
 
+            _backupCts?.Dispose();
+            _backupCts = null;
+
             if (!_disposed && !IsDisposed)
             {
                 btnBackup.Enabled = true;
+                btnCancelBackup.Enabled = false;
                 UseWaitCursor = false;
             }
+        }
+    }
+
+    /// <summary>「取消备份」：请求中止正在运行的备份（令牌会传到文件 I/O，数秒内停止）。</summary>
+    private void OnCancelBackupClick(object? sender, EventArgs e)
+    {
+        var cts = _backupCts;
+
+        if (!_backupRunning || cts is null)
+        {
+            SetStatus("当前没有正在进行的备份。");
+            return;
+        }
+
+        try
+        {
+            _logger.Warn("用户在主界面点击「取消备份」。");
+            cts.Cancel();
+
+            btnCancelBackup.Enabled = false;
+            SetStatus("正在取消备份…已复制完成的文件会保留。");
+        }
+        catch (ObjectDisposedException)
+        {
+            // 恰好同时结束：忽略
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("取消备份失败。", ex);
+            ShowErrorMessage("取消备份失败：" + ex.Message);
         }
     }
 

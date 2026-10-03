@@ -30,6 +30,25 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: 校验标签与 Directory.Build.props 中的版本一致
+        shell: pwsh
+        run: |
+          # 标签是发布的唯一触发入口，版本号却写在 Directory.Build.props 里。
+          # 两者不一致时会发布出「Release 标题写 v0.5.0、exe 里却是 0.4.0」的包，
+          # 用户装到的版本与看到的版本号对不上，且事后无法追溯到底发的是哪份代码。
+          [xml]$props = Get-Content -Path 'Directory.Build.props' -Raw
+          $v = $props.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            throw "Directory.Build.props 中找不到 <Version>，无法校验标签 ${{ github.ref_name }}"
+          }
+
+          $tag = '${{ github.ref_name }}'
+          if ("v$v" -ne $tag) {
+            throw "标签 $tag 与 Directory.Build.props 中的版本 $v 不一致（期望标签 v$v）。请先更新版本号再打标签。"
+          }
+
+          Write-Host "版本校验通过：标签 $tag == v$v"
+
       - name: 还原依赖
         shell: pwsh
         run: |

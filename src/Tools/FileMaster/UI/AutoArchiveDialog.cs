@@ -62,6 +62,9 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
     /// <summary>「移动后清理空目录」复选框。</summary>
     private readonly CheckBox _chkCleanEmptyFolders = new();
 
+    /// <summary>「空目录放入回收站」复选框（默认勾选）。</summary>
+    private readonly CheckBox _chkCleanEmptyFoldersUseRecycleBin = new();
+
     /// <summary>分类规则多行文本框（每行 <c>类型|参数|目标子目录</c>）。</summary>
     private readonly TextBox _txtRules;
 
@@ -89,7 +92,7 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
         AddField(rowTarget, "目标目录：", _txtTarget, 0);
 
         // ---------- 第 3 行：范围、方式、覆盖与空目录 ----------
-        var rowOptions = AddInputRow(InputLabelWidth, 100, 90, 90, 116, 148);
+        var rowOptions = AddInputRow(InputLabelWidth, 100, 90, 90, 116, 148, 190);
 
         _chkIncludeSubDirectories.Text = "包含子目录";
         _chkIncludeSubDirectories.AutoSize = true;
@@ -111,6 +114,12 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
         _chkCleanEmptyFolders.Text = "移动后清理空目录";
         _chkCleanEmptyFolders.AutoSize = true;
         AddCell(rowOptions, _chkCleanEmptyFolders, 5);
+
+        // 清理空目录的删除方式（默认走回收站，避免误删后无法找回）
+        _chkCleanEmptyFoldersUseRecycleBin.Text = "空目录放入回收站";
+        _chkCleanEmptyFoldersUseRecycleBin.AutoSize = true;
+        _chkCleanEmptyFoldersUseRecycleBin.Checked = true;
+        AddCell(rowOptions, _chkCleanEmptyFoldersUseRecycleBin, 6);
 
         // ---------- 第 4 行：分类规则（多行，与右侧「载入示例规则」按钮同一行） ----------
         var rowRules = AddInputRow(InputLabelWidth, -100, 106);
@@ -427,7 +436,9 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
                 ? "，覆盖同名文件（目标文件会被替换，无法撤销）"
                 : "，不覆盖同名文件") +
             (isMove && options.CleanEmptyFolders
-                ? Environment.NewLine + "移动后会清理源目录中的空目录（永久删除空目录，不涉及文件）。"
+                ? Environment.NewLine + (options.CleanEmptyFoldersUseRecycleBin
+                    ? "移动后会清理源目录中的空目录（空目录放入回收站，可还原；不涉及文件）。"
+                    : "移动后会清理源目录中的空目录（空目录【永久删除、不进回收站】，不可恢复；不涉及文件）。")
                 : string.Empty) +
             Environment.NewLine + Environment.NewLine +
             $"确定要{action}这些文件吗？";
@@ -450,6 +461,7 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
         Action = _rdoCopy.Checked ? ArchiveAction.Copy : ArchiveAction.Move,
         Overwrite = _chkOverwrite.Checked,
         CleanEmptyFolders = _chkCleanEmptyFolders.Checked,
+        CleanEmptyFoldersUseRecycleBin = _chkCleanEmptyFoldersUseRecycleBin.Checked,
         Rules = rules
     };
 
@@ -476,7 +488,9 @@ public sealed class AutoArchiveDialog : FeatureDialogBase
         var scope = options.IncludeSubDirectories ? "包含子目录" : "仅当前目录";
         var action = options.Action == ArchiveAction.Move ? "移动" : "复制";
         var overwrite = options.Overwrite ? "覆盖同名文件" : "不覆盖同名文件";
-        var clean = options.CleanEmptyFolders ? "清理空目录" : "不清理空目录";
+        var clean = options.CleanEmptyFolders
+            ? (options.CleanEmptyFoldersUseRecycleBin ? "清理空目录（回收站）" : "清理空目录（永久删除）")
+            : "不清理空目录";
 
         return $"{scope}，{action}，{overwrite}，{clean}，共 {options.Rules.Count} 条规则";
     }

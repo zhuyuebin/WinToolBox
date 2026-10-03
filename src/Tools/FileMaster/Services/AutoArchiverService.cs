@@ -156,6 +156,52 @@ public sealed class AutoArchiverService
     // ---------------------------------------------------------------- 目标目录计算
 
     /// <summary>
+    /// 校验源目录与目标目录不能相同、也不能互相嵌套（P1-19）。
+    /// </summary>
+    /// <returns>合法时返回 null；非法时返回中文原因。</returns>
+    /// <remarks>
+    /// 用 <see cref="PathSafety"/> 的补分隔符前缀比较，而不是裸 <c>StartsWith</c>：
+    /// 否则 <c>D:\database</c> 会被误判成 <c>D:\data</c> 的子目录而遭到误拒。
+    /// </remarks>
+    public static string? ValidateSourceAndTarget(string sourceDirectory, string targetDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(sourceDirectory) || string.IsNullOrWhiteSpace(targetDirectory))
+        {
+            return null;   // 空值由调用方的其它检查负责
+        }
+
+        try
+        {
+            var source = Path.GetFullPath(sourceDirectory);
+            var target = Path.GetFullPath(targetDirectory);
+
+            if (PathSafety.IsSamePath(source, target))
+            {
+                return "源目录与目标目录不能是同一个目录。";
+            }
+
+            if (PathSafety.IsChildPath(target, source))
+            {
+                return $"目标目录不能位于源目录内部（会导致重复运行时段落逐层自我归档）：" +
+                       $"{Environment.NewLine}源目录：{source}{Environment.NewLine}目标目录：{target}";
+            }
+
+            if (PathSafety.IsChildPath(source, target))
+            {
+                return $"源目录不能位于目标目录内部（归档结果会被再次扫描）：" +
+                       $"{Environment.NewLine}源目录：{source}{Environment.NewLine}目标目录：{target}";
+            }
+
+            return null;
+        }
+        catch (Exception)
+        {
+            // 路径非法：交给后面的逐文件校验给出更具体的提示
+            return null;
+        }
+    }
+
+    /// <summary>
     /// 纯函数：按规则计算某个文件应归入的子目录（相对目标根目录）。
     /// </summary>
     public static string ResolveTargetSubDirectory(ArchiveRule rule, string fileName, DateTime lastWriteTime)
@@ -271,6 +317,16 @@ public sealed class AutoArchiverService
             return new ArchivePlan { Error = "请至少配置一条分类规则。" };
         }
 
+        // P1-19：目标目录与源目录互相嵌套会被「逐层自我归档」——
+        // 每运行一次就把上一轮归档的结果再归一次，目录层级无限增长。
+        // 必须在预览阶段就拒绝，而不是等到用户发现文件被搬来搬去。
+        var containmentError = ValidateSourceAndTarget(options.SourceDirectory, options.TargetDirectory);
+        if (containmentError is not null)
+        {
+            _logger?.Warn(containmentError);
+            return new ArchivePlan { Error = containmentError };
+        }
+
         var searchOption = options.IncludeSubDirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var items = new List<ArchivePlanItem>();
         var plannedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -310,16 +366,46 @@ public sealed class AutoArchiverService
                 }
 
                 var subDirectory = ResolveTargetSubDirectory(rule, fileName, lastWrite);
-                var targetPath = Path.Combine(options.TargetDirectory, subDirectory, fileName);
                 var description = DescribeRule(rule);
+
+                // P1-12：规则第三列是自由文本，必须校验它解析后仍在目标根目录之内。
+                // 否则 `..\..\Windows\Temp` 或绝对路径 `D:\elsewhere` 会把文件写到目标之外。
+                if (!PathSafety.TryResolveInside(options.TargetDirectory, subDirectory, out var targetDirectoryFull))
+                {
+                    items.Add(new ArchivePlanItem
+                    {
+                        SourcePath = file,
+                        TargetPath = string.Empty,
+                        RuleKind = rule.Kind,
+                        RuleDescription = description,
+                        CanApply = false,
+                        Message = $"规则的目标子目录「{subDirectory}」会写到目标目录之外，已拒绝。"
+                    });
+
+                    _logger?.Warn($"规则目标越界，已拒绝：规则「{description}」的子目录「{subDirectory}」→ 超出 {options.TargetDirectory}");
+
+                    continue;
+                }
+
+                var targetPath = Path.Combine(targetDirectoryFull, fileName);
 
                 var canApply = true;
                 var message = string.Empty;
+
+                // P1-19.3：源文件已经在目标根目录之内（且不是要把它搬到同一位置）时归档没有意义，
+                // 只会把文件在目标目录里搬来搬去；这里按「是否位于目标根之下」完整判定，
+                // 而不是只比「目标路径 == 源路径」。
+                var sourceInsideTarget = PathSafety.IsChildPath(file, options.TargetDirectory);
 
                 if (string.Equals(Path.GetFullPath(targetPath), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
                 {
                     canApply = false;
                     message = "目标与源文件相同（已在目标目录中）。";
+                }
+                else if (sourceInsideTarget)
+                {
+                    canApply = false;
+                    message = "源文件已经位于目标目录之内，无需再次归档。";
                 }
                 else if (!plannedTargets.Add(targetPath))
                 {
@@ -404,6 +490,13 @@ public sealed class AutoArchiverService
                 {
                     File.Move(item.SourcePath, item.TargetPath, options.Overwrite);
                 }
+                else if (options.Overwrite && File.Exists(item.TargetPath))
+                {
+                    // 覆盖复制不能直接用 File.Copy(..., overwrite: true)：
+                    // 它先截断目标，复制中途失败会留下「长度对、内容全 0」的坏文件，旧版本彻底丢失。
+                    // 与 FolderSyncService 一致：先写 .tmp，成功后再原子替换。
+                    FolderSyncService.CopyAtomically(item.SourcePath, item.TargetPath, _logger);
+                }
                 else
                 {
                     File.Copy(item.SourcePath, item.TargetPath, options.Overwrite);
@@ -440,7 +533,8 @@ public sealed class AutoArchiverService
             });
         }
 
-        // 移动后清理源目录中的空文件夹（永久删除空目录，不涉及文件）
+        // 移动后清理源目录中的空文件夹（是否走回收站由 options.CleanEmptyFoldersUseRecycleBin 决定，
+        // 默认放入回收站；不再硬编码永久删除）
         var removedEmptyFolders = 0;
         if (options.Action == ArchiveAction.Move && options.CleanEmptyFolders && Directory.Exists(options.SourceDirectory))
         {
@@ -452,11 +546,17 @@ public sealed class AutoArchiverService
                 {
                     var deleted = cleaner.Delete(
                         scan.Items.Select(static item => item.FullPath),
-                        useRecycleBin: false,
+                        options.CleanEmptyFoldersUseRecycleBin,
                         progress: null,
                         cancellationToken);
 
                     removedEmptyFolders = deleted.DeletedCount;
+
+                    // 复查时发现已不再为空的目录会被跳过，如实记录，避免用户以为都清掉了
+                    if (deleted.SkippedCount > 0)
+                    {
+                        _logger?.Warn($"有 {deleted.SkippedCount} 个目录在删除前复查时已不再为空，已跳过。");
+                    }
                 }
             }
             catch (OperationCanceledException)

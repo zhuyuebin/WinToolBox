@@ -115,18 +115,26 @@ public class TemplateManagerTests
         Assert.Equal("-a\r\n--b", reloaded.GetTemplate("我的模板"));
     }
 
+    /// <summary>
+    /// 同名保存会覆盖，并返回「保存成功」——返回值语义已从「是否新建」改为「是否成功落盘」，
+    /// 以便界面能如实提示保存失败（P1-5）。
+    /// </summary>
     [Fact]
-    public void SaveTemplate_ExistingName_ReturnsFalseAndOverwrites()
+    public void SaveTemplate_ExistingName_ReturnsTrueAndOverwrites()
     {
         using var ws = new TempWorkspace();
         var manager = new TemplateManager(TemplatesPath(ws));
 
-        manager.SaveTemplate("模板A", "-旧");
-        var isNew = manager.SaveTemplate("模板A", "-新");
+        Assert.True(manager.SaveTemplate("模板A", "-旧"));
+        var saved = manager.SaveTemplate("模板A", "-新");
 
-        Assert.False(isNew);
+        Assert.True(saved, "覆盖保存成功时也必须返回 true");
         Assert.Equal("-新", manager.GetTemplate("模板A"));
         Assert.Equal(3, manager.Count);
+
+        // 覆盖后确实落盘了
+        var reloaded = new TemplateManager(TemplatesPath(ws));
+        Assert.Equal("-新", reloaded.GetTemplate("模板A"));
     }
 
     [Fact]

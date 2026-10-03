@@ -85,6 +85,13 @@ public sealed class DuplicateScanResult
     /// <summary>计算过哈希的文件数。</summary>
     public int HashedFileCount { get; init; }
 
+    /// <summary>
+    /// 被自动合并掉的扫描目录（保序）：与其它目录等价的写法（大小写 / 尾分隔符 / 相对路径不同），
+    /// 或已被另一个递归扫描的父目录完整包含，因此不再单独扫描。
+    /// 展开这些目录会让同一批文件被扫两次、被当成「互为副本」而虚增重复组。
+    /// </summary>
+    public IReadOnlyList<string> MergedDirectories { get; init; } = Array.Empty<string>();
+
     /// <summary>错误信息（正常为 null）。</summary>
     public string? Error { get; init; }
 
@@ -100,7 +107,10 @@ public sealed class DuplicateScanResult
     /// <summary>一句话摘要。</summary>
     public string Summary => Error is not null
         ? "查找失败：" + Error
-        : $"扫描 {ScannedFileCount} 个文件，发现 {Groups.Count} 组重复（可删除 {DuplicateFileCount} 个，可回收 {WastedText}）。";
+        : $"扫描 {ScannedFileCount} 个文件，发现 {Groups.Count} 组重复（可删除 {DuplicateFileCount} 个，可回收 {WastedText}）。" +
+          (MergedDirectories.Count == 0
+              ? string.Empty
+              : $"已自动合并 {MergedDirectories.Count} 个被包含的扫描目录，未重复统计。");
 
     /// <summary>把字节数格式化为 B / KB / MB / GB。</summary>
     public static string FormatSize(long bytes)

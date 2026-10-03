@@ -22,4 +22,9 @@
     <ProjectReference Include="..\..\WinToolBox.Core\WinToolBox.Core.csproj" />
   </ItemGroup>
 
+  <!-- 让测试项目能直接验证 internal 的 SafeDelete（P0-2 的非空保护是安全底线，必须直测） -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="FileMaster.Tests" />
+  </ItemGroup>
+
 </Project>

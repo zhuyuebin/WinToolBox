@@ -18,8 +18,19 @@ namespace WinToolBox.Tools.FileMaster.Services;
 /// </remarks>
 public sealed class FileUnlockerService
 {
-    /// <summary>单次查询最多注册的文件数（目录查询时）。</summary>
-    public const int MaxFilesPerQuery = 256;
+    /// <summary>
+    /// 单次查询最多注册的文件数（目录查询时）。
+    /// </summary>
+    /// <remarks>
+    /// <para>为什么需要上限：Restart Manager 会把每个文件逐个注册进会话（<c>RmRegisterResources</c>），
+    /// 注册成本随文件数线性上升，一次注册几十万个文件既慢又会占用大量会话资源，
+    /// 因此保留一个「远高于日常场景」的上限。</para>
+    /// <para>为什么是 4096：常规目录（照片、文档、源码树）远小于该数量，实际使用时基本不会触发；
+    /// 同时 4096 个路径的注册耗时仍在用户可接受范围内。
+    /// 关键是：一旦真的达到上限，绝不再静默截断，而要通过
+    /// <see cref="FileLockQueryResult.Truncated"/> 明确告知用户「结果不完整」。</para>
+    /// </remarks>
+    public const int MaxFilesPerQuery = 4096;
 
     private const int ErrorSuccess = 0;
     private const int ErrorMoreData = 234;
@@ -55,7 +66,24 @@ public sealed class FileUnlockerService
             return new FileLockQueryResult { Path = fullPath, PathExists = false };
         }
 
-        var files = isDirectory ? ExpandDirectoryFiles(fullPath) : new List<string> { fullPath };
+        List<string> files;
+        int totalFileCount;
+        bool truncated;
+
+        if (isDirectory)
+        {
+            var expansion = ExpandDirectoryFiles(fullPath);
+            files = expansion.Files;
+            totalFileCount = expansion.TotalFileCount;
+            truncated = expansion.Truncated;
+        }
+        else
+        {
+            // 单个文件：总数一定是 1，也不存在截断
+            files = new List<string> { fullPath };
+            totalFileCount = 1;
+            truncated = false;
+        }
 
         if (files.Count == 0)
         {
@@ -64,7 +92,9 @@ public sealed class FileUnlockerService
                 Path = fullPath,
                 PathExists = true,
                 IsDirectory = true,
-                ScannedFileCount = 0
+                ScannedFileCount = 0,
+                TotalFileCount = totalFileCount,
+                Truncated = truncated
             };
         }
 
@@ -80,12 +110,16 @@ public sealed class FileUnlockerService
                     PathExists = true,
                     IsDirectory = isDirectory,
                     ScannedFileCount = files.Count,
+                    TotalFileCount = totalFileCount,
+                    Truncated = truncated,
                     Processes = processes,
                     Error = error
                 };
             }
 
-            _logger?.Info($"文件占用查询：{fullPath}，文件 {files.Count} 个，占用进程 {processes.Count} 个。");
+            _logger?.Info(
+                $"文件占用查询：{fullPath}，文件 {files.Count}/{totalFileCount} 个，占用进程 {processes.Count} 个" +
+                (truncated ? "（结果不完整）" : string.Empty) + "。");
 
             return new FileLockQueryResult
             {
@@ -93,6 +127,8 @@ public sealed class FileUnlockerService
                 PathExists = true,
                 IsDirectory = isDirectory,
                 ScannedFileCount = files.Count,
+                TotalFileCount = totalFileCount,
+                Truncated = truncated,
                 Processes = processes
             };
         }
@@ -105,6 +141,8 @@ public sealed class FileUnlockerService
                 PathExists = true,
                 IsDirectory = isDirectory,
                 ScannedFileCount = files.Count,
+                TotalFileCount = totalFileCount,
+                Truncated = truncated,
                 Error = ex.Message
             };
         }
@@ -236,30 +274,60 @@ public sealed class FileUnlockerService
 
     // ---------------------------------------------------------------- 内部实现
 
-    /// <summary>目录查询：展开目录内的文件（上限 <see cref="MaxFilesPerQuery"/> 个）。</summary>
-    private List<string> ExpandDirectoryFiles(string directory)
+    /// <summary>
+    /// 目录展开的结果：参与注册的文件、目录内实际文件总数、结果是否不完整。
+    /// </summary>
+    /// <param name="Files">真正注册进 Restart Manager 会话的文件（最多 <see cref="MaxFilesPerQuery"/> 个）。</param>
+    /// <param name="TotalFileCount">目录内实际文件总数（不截断；枚举中途失败时为已数到的下限）。</param>
+    /// <param name="Truncated">是否达到上限或枚举中途失败，即结果不完整。</param>
+    private readonly record struct DirectoryExpansion(List<string> Files, int TotalFileCount, bool Truncated);
+
+    /// <summary>
+    /// 目录查询：展开目录内的文件（注册上限 <see cref="MaxFilesPerQuery"/> 个），
+    /// 同时数出目录内实际文件总数，用于在截断时如实告知用户「结果不完整」。
+    /// </summary>
+    /// <remarks>
+    /// 达到上限后仍然继续枚举但不再保存路径：枚举本身很便宜，而「到底有多少文件」这个数字
+    /// 是判断结果是否完整的关键，不能因为截断就一起丢掉。
+    /// </remarks>
+    private DirectoryExpansion ExpandDirectoryFiles(string directory)
     {
         var files = new List<string>();
+        var totalFileCount = 0;
+        var hitLimit = false;
+        var enumerationFailed = false;
 
         try
         {
             foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
             {
-                files.Add(file);
+                totalFileCount++;
 
-                if (files.Count >= MaxFilesPerQuery)
+                if (files.Count < MaxFilesPerQuery)
                 {
-                    _logger?.Warn($"目录内文件过多，仅检查前 {MaxFilesPerQuery} 个文件：{directory}");
-                    break;
+                    files.Add(file);
+                }
+                else
+                {
+                    hitLimit = true;
                 }
             }
         }
         catch (Exception ex)
         {
+            // 枚举中途失败（权限不足、目录被删除等）：已数到的文件仍然参与查询，
+            // 但绝不能假装结果完整，因此一律标记为截断。
+            enumerationFailed = true;
             _logger?.Warn($"展开目录文件失败：{directory}", ex);
         }
 
-        return files;
+        if (hitLimit)
+        {
+            _logger?.Warn(
+                $"目录内文件过多，仅检查前 {MaxFilesPerQuery} 个文件（该目录共 {totalFileCount} 个，结果不完整）：{directory}");
+        }
+
+        return new DirectoryExpansion(files, totalFileCount, hitLimit || enumerationFailed);
     }
 
     /// <summary>调用 Restart Manager 查询占用进程。</summary>
@@ -460,6 +528,13 @@ public sealed class FileUnlockerService
         builder.AppendLine("路径：" + result.Path);
         builder.AppendLine("是否目录：" + (result.IsDirectory ? "是" : "否"));
         builder.AppendLine("检查文件数：" + result.ScannedFileCount);
+
+        // 截断时把「目录里到底有多少文件」一并写进报告：复制出去的文本也必须如实反映结果不完整
+        if (result.Truncated)
+        {
+            builder.AppendLine($"目录文件总数：{result.TotalFileCount}（结果不完整）");
+        }
+
         builder.AppendLine(result.Summary);
         builder.AppendLine();
 

@@ -32,7 +32,16 @@ internal static class Program
         // 高 DPI、默认字体等 WinForms 全局初始化（由 SDK 生成）
         ApplicationConfiguration.Initialize();
 
-        var logger = Logger.Instance;
+        // P1-2：必须在创建 TrayApplicationContext / Notifier **之前**装好 UI 同步上下文。
+        // 它们都在构造函数里读 SynchronizationContext.Current 并在后台任务完成后用它切回 UI 线程；
+        // 而此时消息循环还没跑（Application.Run 尚未调用），Current 是 null ——
+        // 结果是备份完成后的气泡回调直接在后台线程执行，通知时有时无。
+        WindowsFormsSynchronizationContext.AutoInstall = true;
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
+        // P1-4：写工具专属日志目录（%LocalAppData%\WinToolBox\logs\UsbBackup\），
+        // 避免与 FileMaster 混在同一个文件里，也避免两边的保留期清理互相干扰。
+        var logger = Logger.ForTool("UsbBackup");
 
         if (HasSwitch(args, VersionSwitch))
         {
@@ -50,12 +59,74 @@ internal static class Program
     }
 
     /// <summary>
+    /// 日志写入失败时给出明确提示（P1-4）。
+    /// </summary>
+    /// <remarks>
+    /// 日志失败本身不影响备份功能，但会让排障无从下手：用户以为「日志里没有错误 = 没问题」。
+    /// 这里只在**确实写入失败**时提示，并给出日志目录与常见原因。
+    /// </remarks>
+    private static void WarnIfLogWriteFailed(Logger logger)
+    {
+        if (!logger.HasWriteFailure)
+        {
+            return;
+        }
+
+        try
+        {
+            MessageBox.Show(
+                $"本次运行有 {logger.FailedWriteCount} 条日志未能写入磁盘。" + Environment.NewLine + Environment.NewLine +
+                $"日志目录：{logger.LogDirectory}" + Environment.NewLine +
+                (logger.LastError is { } error ? "最近一次原因：" + error.Message : string.Empty) +
+                Environment.NewLine + Environment.NewLine +
+                "备份功能不受影响，但出问题时将没有日志可查。常见原因：磁盘空间不足、目录被安全软件拦截、目录权限不足。" +
+                Environment.NewLine + "可尝试在「设置」里清理磁盘空间，或以你自己的账户重新启动本程序。",
+                "WinToolBox - U盘备份（日志写入失败）",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            // 连提示框都弹不出来时，只能记入日志（可能同样失败，但不影响启动）
+            logger.Warn("显示日志写入失败提示时出错。", ex);
+        }
+    }
+
+    /// <summary>
     /// 受限上下文（低完整性）下，系统会静默拒绝托盘图标注册，用户只会看到“进程在运行但托盘里没有图标”。
     /// 这里提前把原因和解决办法讲清楚，避免被误判成程序没启动。
     /// </summary>
     private static void WarnIfRestrictedContext(Logger logger)
     {
-        if (!ProcessIntegrity.IsRestricted(out var integrity))
+        var result = ProcessIntegrity.Check(out var integrity, out var failureReason);
+
+        if (result == IntegrityCheckResult.Unknown)
+        {
+            // P1-18：读不到完整性级别时不能当成「正常」蒙混过去（fail-open），
+            // 而是明确告诉用户「无法确定」，并给出托盘图标不显示时的排查方向。
+            logger.Warn($"无法确定进程完整性级别：{failureReason}");
+            try
+            {
+                MessageBox.Show(
+                    "无法确定当前进程的完整性级别（原因：" + failureReason + "）。" + Environment.NewLine + Environment.NewLine +
+                    "这本身不影响备份功能，但如果托盘图标没有显示，请依次检查：" + Environment.NewLine +
+                    "  1) 任务管理器里 UsbBackup.exe 是否在运行（在运行就说明程序已启动）；" + Environment.NewLine +
+                    "  2) 图标是否被 Windows 11 收进了任务栏的 “^” 折叠区；" + Environment.NewLine +
+                    "  3) 到「设置 → 个性化 → 任务栏 → 其他系统托盘图标」把 UsbBackup 设为显示；" + Environment.NewLine +
+                    "  4) 若以上都正常仍看不到图标，请改为在资源管理器里双击 UsbBackup.exe 启动。",
+                    "WinToolBox - U盘备份",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn("显示完整性级别未知提示失败。", ex);
+            }
+
+            return;
+        }
+
+        if (result != IntegrityCheckResult.Restricted)
         {
             return;
         }
@@ -104,9 +175,13 @@ internal static class Program
 
         logger.Info("UsbBackup 托盘程序启动。");
 
+        // P1-4：日志写不出去必须让用户知道 —— 否则出问题时「日志里什么都没有」，
+        // 用户会以为是程序没问题，而不是日志根本没落盘。
+        WarnIfLogWriteFailed(logger);
+
         try
         {
-            Application.Run(new TrayApplicationContext());
+            Application.Run(new TrayApplicationContext(logger));
             logger.Info("UsbBackup 托盘程序已退出。");
             return 0;
         }
@@ -260,35 +335,76 @@ internal static class Program
                 FreeSpace = 4L * 1024 * 1024 * 1024
             };
 
-            var target = BackupRules.BuildTargetDirectory(backupRoot, device, DateTime.Now);
-            report.AppendLine($"源目录　：{sourceRoot}");
-            report.AppendLine($"目标目录：{target}");
-            report.AppendLine($"设备标识：{device.UniqueId}");
+            var target = BackupRules.BuildCurrentDirectory(backupRoot, device);
+            var historyRoot = BackupRules.BuildHistoryRootDirectory(backupRoot, device);
+            report.AppendLine($"源目录　　：{sourceRoot}");
+            report.AppendLine($"current　 ：{target}");
+            report.AppendLine($"history　 ：{historyRoot}");
+            report.AppendLine($"设备标识　：{device.UniqueId}");
             report.AppendLine();
 
-            var copier = new FileCopier(logger);
+            // 用镜像服务（产品语义：固定目录 + 真增量 + 软删除历史）执行自检
+            var mirror = new BackupMirrorService(logger);
+            var rules = BackupRules.CreateDefaultExcludeRules();
 
-            // 1) 首次复制：应复制 2 个文件（readme.txt 与 sub\data.csv）
-            var first = copier.CopyDirectory(sourceRoot, target, null, BackupRules.CreateDefaultExcludeRules());
-            Check(report, ref pass, ref fail, "首次复制复制了 2 个文件", first.CopiedFiles == 2, $"实际 {first.CopiedFiles}");
-            Check(report, ref pass, ref fail, "首次复制没有失败文件", first.FailedFiles == 0, $"失败 {first.FailedFiles}");
-            Check(report, ref pass, ref fail, "目标文件 readme.txt 已生成", File.Exists(Path.Combine(target, "readme.txt")), "文件不存在");
-            Check(report, ref pass, ref fail, "目标文件 sub\\data.csv 已生成", File.Exists(Path.Combine(target, "sub", "data.csv")), "文件不存在");
+            MirrorResult RunMirror() => mirror.Mirror(
+                sourceDirectory: sourceRoot,
+                backupRootDirectory: backupRoot,
+                device: device,
+                excludeRules: rules,
+                historyRetentionDays: BackupConfig.DefaultHistoryRetentionDays,
+                strictContentVerification: true);
+
+            // 1) 首次镜像：应复制 2 个文件（readme.txt 与 sub\data.csv）
+            var firstRun = RunMirror();
+            var first = firstRun.Copy;
+            Check(report, ref pass, ref fail, "首次备份复制了 2 个文件", first.CopiedFiles == 2, $"实际 {first.CopiedFiles}");
+            Check(report, ref pass, ref fail, "首次备份没有失败文件", firstRun.FailedFiles == 0, $"失败 {firstRun.FailedFiles}");
+            Check(report, ref pass, ref fail, "current\\readme.txt 已生成", File.Exists(Path.Combine(target, "readme.txt")), "文件不存在");
+            Check(report, ref pass, ref fail, "current\\sub\\data.csv 已生成", File.Exists(Path.Combine(target, "sub", "data.csv")), "文件不存在");
             Check(report, ref pass, ref fail, "排除规则生效：.tmp 未被复制", !File.Exists(Path.Combine(target, "skip.tmp")), "被复制了");
             Check(report, ref pass, ref fail, "排除规则生效：autorun.inf 未被复制", !File.Exists(Path.Combine(target, "autorun.inf")), "被复制了");
+            Check(report, ref pass, ref fail, "目标目录不含日期（固定 current 目录）",
+                !target.Contains(DateTime.Now.ToString("yyyy-MM-dd")), target);
+            Check(report, ref pass, ref fail, "manifest.json 已生成", File.Exists(firstRun.ManifestPath), firstRun.ManifestPath);
 
-            // 2) 第二次复制：全部内容未变化，应全部跳过
-            var second = copier.CopyDirectory(sourceRoot, target, null, BackupRules.CreateDefaultExcludeRules());
-            Check(report, ref pass, ref fail, "第二次复制全部跳过（CopiedFiles = 0）", second.CopiedFiles == 0, $"实际 {second.CopiedFiles}");
-            Check(report, ref pass, ref fail, "第二次复制跳过 2 个文件", second.SkippedFiles == 2, $"实际 {second.SkippedFiles}");
+            // 2) 第二次镜像：全部内容未变化，应全部跳过且不产生 history
+            var secondRun = RunMirror();
+            Check(report, ref pass, ref fail, "第二次备份全部跳过（CopiedFiles = 0）", secondRun.Copy.CopiedFiles == 0, $"实际 {secondRun.Copy.CopiedFiles}");
+            Check(report, ref pass, ref fail, "第二次备份跳过 2 个文件", secondRun.Copy.SkippedFiles == 2, $"实际 {secondRun.Copy.SkippedFiles}");
+            Check(report, ref pass, ref fail, "内容未变时不产生历史版本", secondRun.ArchivedFiles == 0, $"实际 {secondRun.ArchivedFiles}");
 
-            // 3) 修改一个源文件后再复制：只应复制 1 个（大小变化，增量判定必然生效）
+            // 3) 修改一个源文件后再镜像：新版本写入 current，旧版本进入 history
             var modifiedPath = Path.Combine(sourceRoot, "readme.txt");
-            File.WriteAllText(modifiedPath, "内容已更新，长度也变化了，用于验证增量复制。", new UTF8Encoding(false));
+            var originalContent = File.ReadAllText(modifiedPath);
+            File.WriteAllText(modifiedPath, "内容已更新，长度也变化了，用于验证增量备份 + 版本历史。", new UTF8Encoding(false));
 
-            var third = copier.CopyDirectory(sourceRoot, target, null, BackupRules.CreateDefaultExcludeRules());
-            Check(report, ref pass, ref fail, "源文件修改后只复制 1 个文件", third.CopiedFiles == 1, $"实际 {third.CopiedFiles}");
-            Check(report, ref pass, ref fail, "修改后的内容已同步到目标", File.ReadAllText(Path.Combine(target, "readme.txt")) == File.ReadAllText(modifiedPath), "内容不一致");
+            var thirdRun = RunMirror();
+            Check(report, ref pass, ref fail, "源文件修改后只复制 1 个文件", thirdRun.Copy.CopiedFiles == 1, $"实际 {thirdRun.Copy.CopiedFiles}");
+            Check(report, ref pass, ref fail, "修改后的内容已同步到 current",
+                File.ReadAllText(Path.Combine(target, "readme.txt")) == File.ReadAllText(modifiedPath), "内容不一致");
+
+            var historyToday = BackupRules.BuildHistoryDirectory(backupRoot, device, DateTime.Now);
+            var archivedReadme = Path.Combine(historyToday, "readme.txt");
+            Check(report, ref pass, ref fail, "旧版本被移入 history", File.Exists(archivedReadme), archivedReadme);
+            Check(report, ref pass, ref fail, "history 中保留的是改写前的旧内容",
+                File.Exists(archivedReadme) && File.ReadAllText(archivedReadme) == originalContent, "旧版本内容不符");
+
+            // 4) 删除 U 盘里的文件：current 中的副本移入 history，而不是消失
+            var deletedSource = Path.Combine(sourceRoot, "sub", "data.csv");
+            var deletedContent = File.ReadAllText(deletedSource);
+            File.Delete(deletedSource);
+
+            var fourthRun = RunMirror();
+            var currentDataCsv = Path.Combine(target, "sub", "data.csv");
+            var archivedDataCsv = Path.Combine(historyToday, "sub", "data.csv");
+            Check(report, ref pass, ref fail, "U 盘删除后 current 中不再有该文件", !File.Exists(currentDataCsv), currentDataCsv);
+            Check(report, ref pass, ref fail, "U 盘删除后副本被移入 history（软删除）", File.Exists(archivedDataCsv), archivedDataCsv);
+            Check(report, ref pass, ref fail, "history 中保留被删除文件的原始内容",
+                File.Exists(archivedDataCsv) && File.ReadAllText(archivedDataCsv) == deletedContent, "内容不符");
+            Check(report, ref pass, ref fail, "manifest 记录了删除并转入历史 1 个",
+                BackupMirrorService.ReadManifest(fourthRun.ManifestPath)?.Comparison.DeletedFiles == 1,
+                "manifest 对比结果不符");
 
             // 4) 配置往返：写入临时 config.json 后再读回
             var configFile = Path.Combine(tempRoot, "config", "config.json");
@@ -312,7 +428,10 @@ internal static class Program
             Check(report, ref pass, ref fail, "可移动磁盘枚举未抛异常", true, string.Empty);
 
             // 6) 只读安全校验：源目录中的文件数量未被改变（程序绝不写入源）
-            Check(report, ref pass, ref fail, "源目录文件数量保持不变（4 个）", Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories).Length == 4, "源目录被意外修改");
+            //    自检过程中我们在步骤 4) 故意删掉了 1 个源文件（模拟 U 盘上误删），
+            //    因此期望值 = 初始 4 个 - 1 = 3 个：既验证“没有多写”，也验证“删除确实生效”。
+            var sourceFileCount = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories).Length;
+            Check(report, ref pass, ref fail, "源目录文件数量保持不变（4 - 1 个已删除 = 3 个）", sourceFileCount == 3, $"实际 {sourceFileCount} 个");
 
             logger.Info($"自检完成：通过 {pass} 项，失败 {fail} 项。");
         }

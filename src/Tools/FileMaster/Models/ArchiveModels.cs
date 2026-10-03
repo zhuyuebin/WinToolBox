@@ -69,6 +69,12 @@ public sealed class ArchiveOptions
     /// <summary>移动后是否清理源目录中的空文件夹。</summary>
     public bool CleanEmptyFolders { get; init; }
 
+    /// <summary>
+    /// 清理空目录时是否放入回收站（默认 true）。
+    /// <para>false 表示永久删除空目录（不进回收站），UI 必须明确提示。</para>
+    /// </summary>
+    public bool CleanEmptyFoldersUseRecycleBin { get; init; } = true;
+
     /// <summary>规则列表（按顺序匹配，<see cref="ArchiveRuleKind.Fallback"/> 最后匹配）。</summary>
     public IReadOnlyList<ArchiveRule> Rules { get; init; } = Array.Empty<ArchiveRule>();
 }

@@ -129,58 +129,146 @@ public sealed class BackupRulesTests
     }
 
     // ------------------------------------------------------------------
-    // BuildTargetDirectory
+    // 目录结构（产品语义：固定目录 + 真增量 + 软删除历史，绝不带日期）
     // ------------------------------------------------------------------
 
     [Fact]
-    public void BuildTargetDirectory_EqualsRootLabelSerialDate()
+    public void BuildCurrentDirectory_IsRootLabelSerialCurrent_WithoutDate()
+    {
+        var device = Device();
+
+        var current = BackupRules.BuildCurrentDirectory(@"D:\UsbBackupRoot", device);
+
+        Assert.Equal(
+            Path.Combine(@"D:\UsbBackupRoot", "KINGSTON_1234ABCD", "current"),
+            current);
+    }
+
+    [Fact]
+    public void BuildCurrentDirectory_NeverContainsDate()
+    {
+        var device = Device();
+
+        var current = BackupRules.BuildCurrentDirectory(@"D:\UsbBackupRoot", device);
+
+        // 产品语义已明确：整个 U 盘只对应一个备份根目录，不再使用 {yyyy-MM-dd} 作为目标目录
+        Assert.DoesNotContain(DateTime.Now.ToString("yyyy-MM-dd"), current);
+        Assert.DoesNotContain(DateTime.UtcNow.ToString("yyyy-MM-dd"), current);
+        Assert.EndsWith("current", current);
+    }
+
+    [Fact]
+    public void BuildTargetDirectory_EqualsCurrentDirectory_ForBackwardCompatibility()
+    {
+        var device = Device();
+
+        Assert.Equal(
+            BackupRules.BuildCurrentDirectory(@"D:\root", device),
+            BackupRules.BuildTargetDirectory(@"D:\root", device));
+    }
+
+    [Fact]
+    public void BuildDeviceRootDirectory_IsRootLabelSerial()
+    {
+        Assert.Equal(
+            Path.Combine(@"D:\root", "KINGSTON_1234ABCD"),
+            BackupRules.BuildDeviceRootDirectory(@"D:\root", Device()));
+    }
+
+    [Fact]
+    public void BuildHistoryDirectory_UsesYyyyMmDdUnderHistory()
     {
         var device = Device();
         var date = new DateTime(2026, 3, 9, 23, 59, 59);
 
-        var target = BackupRules.BuildTargetDirectory(@"D:\UsbBackupRoot", device, date);
+        var history = BackupRules.BuildHistoryDirectory(@"D:\root", device, date);
 
         Assert.Equal(
-            Path.Combine(@"D:\UsbBackupRoot", "KINGSTON_1234ABCD", "2026-03-09"),
-            target);
-        Assert.EndsWith(Path.Combine("KINGSTON_1234ABCD", "2026-03-09"), target);
+            Path.Combine(@"D:\root", "KINGSTON_1234ABCD", "history", "2026-03-09"),
+            history);
     }
 
     [Fact]
-    public void BuildTargetDirectory_WhenRootIsRelative_ReturnsAbsolutePath()
+    public void BuildManifestPath_IsUnderDeviceRoot()
     {
-        var target = BackupRules.BuildTargetDirectory("RelativeRoot", Device(), new DateTime(2026, 1, 2));
+        Assert.Equal(
+            Path.Combine(@"D:\root", "KINGSTON_1234ABCD", "manifest.json"),
+            BackupRules.BuildManifestPath(@"D:\root", Device()));
+    }
 
-        Assert.True(Path.IsPathFullyQualified(target));
-        Assert.EndsWith(Path.Combine("RelativeRoot", "KINGSTON_1234ABCD", "2026-01-02"), target);
+    [Theory]
+    [InlineData("2026-09-30", 2026, 9, 30)]
+    [InlineData("2026-01-02", 2026, 1, 2)]
+    public void TryParseHistoryFolderName_ParsesValidDates(string folder, int year, int month, int day)
+    {
+        var parsed = BackupRules.TryParseHistoryFolderName(folder);
+
+        Assert.NotNull(parsed);
+        Assert.Equal(new DateTime(year, month, day), parsed!.Value);
+    }
+
+    [Theory]
+    [InlineData("history")]
+    [InlineData("2026-9-3")]
+    [InlineData("not-a-date")]
+    [InlineData("")]
+    public void TryParseHistoryFolderName_ReturnsNullForNonDateFolders(string folder)
+    {
+        // 非日期目录（用户自己放进去的）必须被忽略，清理时绝不能误删
+        Assert.Null(BackupRules.TryParseHistoryFolderName(folder));
     }
 
     [Fact]
-    public void BuildTargetDirectory_WhenRootHasTrailingSeparator_DoesNotDoubleSeparator()
+    public void FormatHistoryFolderName_ZeroPadsMonthAndDay()
+    {
+        Assert.Equal("2026-09-03", BackupRules.FormatHistoryFolderName(new DateTime(2026, 9, 3)));
+    }
+
+    [Fact]
+    public void BuildCurrentDirectory_WhenRootIsRelative_ReturnsAbsolutePath()
+    {
+        var current = BackupRules.BuildCurrentDirectory("RelativeRoot", Device());
+
+        Assert.True(Path.IsPathFullyQualified(current));
+        Assert.EndsWith(Path.Combine("RelativeRoot", "KINGSTON_1234ABCD", "current"), current);
+    }
+
+    [Fact]
+    public void BuildCurrentDirectory_WhenRootHasTrailingSeparator_DoesNotDoubleSeparator()
     {
         var device = Device();
 
-        var withSeparator = BackupRules.BuildTargetDirectory(@"D:\UsbBackupRoot\", device, new DateTime(2026, 5, 6));
-        var withoutSeparator = BackupRules.BuildTargetDirectory(@"D:\UsbBackupRoot", device, new DateTime(2026, 5, 6));
+        var withSeparator = BackupRules.BuildCurrentDirectory(@"D:\UsbBackupRoot\", device);
+        var withoutSeparator = BackupRules.BuildCurrentDirectory(@"D:\UsbBackupRoot", device);
 
         Assert.Equal(withoutSeparator, withSeparator);
         Assert.DoesNotContain(@"UsbBackupRoot" + Path.DirectorySeparatorChar + Path.DirectorySeparatorChar, withSeparator);
     }
 
     [Fact]
-    public void BuildTargetDirectory_WhenRootOrDeviceInvalid_Throws()
+    public void BuildCurrentDirectory_WhenRootOrDeviceInvalid_Throws()
     {
-        Assert.Throws<ArgumentException>(() => BackupRules.BuildTargetDirectory("", Device(), DateTime.Now));
-        Assert.Throws<ArgumentException>(() => BackupRules.BuildTargetDirectory("   ", Device(), DateTime.Now));
-        Assert.Throws<ArgumentNullException>(() => BackupRules.BuildTargetDirectory(@"D:\root", null!, DateTime.Now));
+        Assert.Throws<ArgumentException>(() => BackupRules.BuildCurrentDirectory("", Device()));
+        Assert.Throws<ArgumentException>(() => BackupRules.BuildCurrentDirectory("   ", Device()));
+        Assert.Throws<ArgumentNullException>(() => BackupRules.BuildCurrentDirectory(@"D:\root", null!));
     }
 
     [Fact]
-    public void BuildTargetDirectory_ZeroPadsMonthAndDay()
+    public void BuildCurrentDirectory_UsesUnknownPlaceholdersForBlankLabelAndSerial()
     {
-        var target = BackupRules.BuildTargetDirectory(@"D:\root", Device(), new DateTime(2026, 9, 30));
+        var device = new UsbDeviceInfo
+        {
+            RootPath = @"E:\",
+            VolumeLabel = "   ",
+            VolumeSerialNumber = "",
+            TotalSize = 1024
+        };
 
-        Assert.EndsWith("2026-09-30", target);
+        var current = BackupRules.BuildCurrentDirectory(@"D:\root", device);
+
+        Assert.EndsWith(
+            Path.Combine(BackupRules.UnknownLabel + "_" + BackupRules.UnknownSerial, "current"),
+            current);
     }
 
     // ------------------------------------------------------------------

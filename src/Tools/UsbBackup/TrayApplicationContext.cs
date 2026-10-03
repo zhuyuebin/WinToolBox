@@ -13,6 +13,12 @@ public sealed class TrayApplicationContext : ApplicationContext
     /// <summary>并发保护：避免用户连点“立即备份”时重复提交后台任务。</summary>
     private readonly object _backupRequestSync = new();
 
+    /// <summary>退出时等待正在运行的备份收尾的最长时间。</summary>
+    private static readonly TimeSpan ExitWaitTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>当前后台备份任务的句柄（没有任务时为 null）。退出时要等它收尾，不能让它带着半截文件跑完。</summary>
+    private Task? _backupTask;
+
     /// <summary>创建本对象时的 UI 线程同步上下文（后台任务完成后用它切回 UI 线程）。</summary>
     private readonly SynchronizationContext? _uiContext;
 
@@ -27,16 +33,30 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ContextMenuStrip _contextMenu;
     private readonly ToolStripMenuItem _backupMenuItem;
 
+    /// <summary>托盘菜单里的「取消备份」项（只在有备份在跑时可用）。</summary>
+    private readonly ToolStripMenuItem _cancelBackupMenuItem;
+
     private bool _backupRequestRunning;
     private bool _disposed;
 
     /// <summary>主界面窗口（普通用户的主要入口；关闭窗口时只隐藏，不退出程序）。</summary>
     private MainForm? _mainForm;
 
-    /// <summary>创建托盘程序上下文。</summary>
+    /// <summary>创建托盘程序上下文（使用默认的 UsbBackup 专属日志记录器）。</summary>
     public TrayApplicationContext()
+        : this(null)
     {
-        _logger = Logger.Instance;
+    }
+
+    /// <summary>创建托盘程序上下文。</summary>
+    /// <param name="logger">
+    /// 日志记录器；为 null 时使用 UsbBackup 专属日志目录
+    /// （<c>%LocalAppData%\WinToolBox\logs\UsbBackup\</c>）。
+    /// </param>
+    public TrayApplicationContext(Logger? logger)
+    {
+        // P1-4：默认走 UsbBackup 专属日志目录，不写共享日志文件（否则两个工具的日志会混在一起）
+        _logger = logger ?? Logger.ForTool("UsbBackup");
 
         // 在 UI 线程上构造：先记下消息循环的同步上下文，供后台备份完成后回切使用
         _uiContext = SynchronizationContext.Current;
@@ -59,9 +79,14 @@ public sealed class TrayApplicationContext : ApplicationContext
         _backupMenuItem = new ToolStripMenuItem("立即备份");
         _backupMenuItem.Click += OnBackupNowClick;
 
+        // P1-7：备份中可用的「取消备份」入口
+        _cancelBackupMenuItem = new ToolStripMenuItem("取消备份") { Enabled = false };
+        _cancelBackupMenuItem.Click += OnCancelBackupClick;
+
         _contextMenu = new ContextMenuStrip();
         _contextMenu.Items.Add(CreateMenuItem("打开主界面", OnOpenMainClick));
         _contextMenu.Items.Add(_backupMenuItem);
+        _contextMenu.Items.Add(_cancelBackupMenuItem);
         _contextMenu.Items.Add(CreateMenuItem("打开日志", OnOpenLogClick));
         _contextMenu.Items.Add(new ToolStripSeparator());
         _contextMenu.Items.Add(CreateMenuItem("退出", OnExitClick));
@@ -206,9 +231,11 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
 
         _backupMenuItem.Enabled = false;
+        _cancelBackupMenuItem.Enabled = true;
         _logger.Info("提交备份任务：" + startMessage);
 
-        _ = Task.Run(() =>
+        // 保存 Task 句柄（不再用 `_ =` 丢弃）：退出流程需要等它收尾
+        _backupTask = Task.Run(() =>
         {
             IReadOnlyList<BackupOutcome>? outcomes = null;
             Exception? failure = null;
@@ -230,6 +257,85 @@ public sealed class TrayApplicationContext : ApplicationContext
         });
     }
 
+    /// <summary>请求取消正在进行的备份（托盘菜单入口）。</summary>
+    private void OnCancelBackupClick(object? sender, EventArgs e)
+    {
+        if (!_backupService.CancelCurrentBackup())
+        {
+            ShowBalloon("没有正在进行的备份", "当前没有备份任务在运行。");
+            return;
+        }
+
+        _logger.Warn("用户从托盘菜单请求取消备份。");
+        ShowBalloon("正在取消备份", "已请求取消，备份会在数秒内停止；已复制完成的文件会被保留。");
+    }
+
+    /// <summary>
+    /// 退出前收尾正在运行的备份：先请求取消，再最多等 <see cref="ExitWaitTimeout"/>。
+    /// </summary>
+    /// <returns>true 表示可以安全退出；false 表示备份仍在进行，需要用户决定是否强制退出。</returns>
+    private bool TryStopRunningBackup()
+    {
+        Task? task;
+
+        lock (_backupRequestSync)
+        {
+            task = _backupTask;
+        }
+
+        if (task is null || task.IsCompleted)
+        {
+            return true;
+        }
+
+        // 第一步：取消（令牌一路传到文件 I/O，大文件也能很快停下）
+        _logger.Warn("退出前检测到备份仍在进行，先请求取消。");
+        _backupService.CancelCurrentBackup();
+
+        try
+        {
+            // 第二步：等待收尾，避免进程带着写了一半的目标文件结束
+            if (task.Wait(ExitWaitTimeout))
+            {
+                _logger.Info("正在进行的备份已在退出等待期内安全结束。");
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // 备份任务自身的异常不该阻塞退出
+            _logger.Warn("等待备份任务收尾时发生异常。", ex);
+            return true;
+        }
+
+        _logger.Warn($"备份在 {ExitWaitTimeout.TotalSeconds:0} 秒内仍未结束。");
+        return false;
+    }
+
+    /// <summary>询问用户是否强制退出（备份仍在进行时）。</summary>
+    private bool ConfirmForceExit()
+    {
+        try
+        {
+            var answer = MessageBox.Show(
+                $"备份仍在进行，{ExitWaitTimeout.TotalSeconds:0} 秒内没有结束。" + Environment.NewLine + Environment.NewLine +
+                "现在退出会中断备份：正在复制的那个文件不会留下半截内容（程序用临时文件 + 原子替换），" +
+                "但本轮尚未复制的文件不会被备份。" + Environment.NewLine + Environment.NewLine +
+                "是否强制退出？",
+                "正在备份，退出将中断备份",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            return answer == DialogResult.Yes;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("显示强制退出确认框失败。", ex);
+            return false;
+        }
+    }
+
     /// <summary>备份任务收尾（始终回到 UI 线程执行）。</summary>
     private void CompleteBackupRequest(IReadOnlyList<BackupOutcome>? outcomes, Exception? failure)
     {
@@ -241,6 +347,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         try
         {
             _backupMenuItem.Enabled = true;
+
+            // 备份已结束，取消入口重新禁用
+            _cancelBackupMenuItem.Enabled = false;
 
             if (failure is not null)
             {
@@ -278,6 +387,15 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             _logger.Error("处理备份结果时发生异常。", ex);
             _backupMenuItem.Enabled = true;
+            _cancelBackupMenuItem.Enabled = false;
+        }
+        finally
+        {
+            // 任务已收尾，清掉句柄，避免退出流程去等一个早就结束的任务
+            lock (_backupRequestSync)
+            {
+                _backupTask = null;
+            }
         }
     }
 
@@ -336,9 +454,16 @@ public sealed class TrayApplicationContext : ApplicationContext
         return item;
     }
 
-    /// <summary>退出程序：先关闭主界面，再隐藏并释放托盘图标、停止监听、结束消息循环。</summary>
+    /// <summary>退出程序：先关停正在进行的备份（取消 + 等待），再关闭主界面、释放托盘图标、停止监听、结束消息循环。</summary>
     private void ExitApplication()
     {
+        // 第一步：绝不带着正在写盘的备份退出（否则目标文件可能是半截的）
+        if (!TryStopRunningBackup() && !ConfirmForceExit())
+        {
+            _logger.Info("用户选择不强制退出，已取消退出流程。");
+            return;
+        }
+
         try
         {
             if (_mainForm is not null)

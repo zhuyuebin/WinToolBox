@@ -327,17 +327,28 @@ public sealed class FolderSyncDialog : FeatureDialogBase
         SetStatus(result.Summary + " 请重新点击「生成计划」查看当前差异。");
         AppendLog(result.Summary);
 
-        foreach (var failed in result.Items.Where(static item => !item.Success).Take(MaxDisplayedMessages))
+        foreach (var failed in result.Items.Where(static item => !item.Success && !item.Skipped).Take(MaxDisplayedMessages))
         {
             AppendLog($"失败：{FolderSyncService.DescribeAction(failed.Kind)}：{failed.RelativePath}：{failed.Error}");
         }
 
-        if (!result.Success)
+        // 保护性跳过（复制失败时宁可不删）不是错误，单独提示，避免被当成失败项惊吓用户
+        var skipped = result.Items.Where(static item => item.Skipped).ToList();
+        if (skipped.Count > 0)
+        {
+            AppendLog($"因复制失败已跳过删除 {skipped.Count} 项（目标中多余的内容已保留）。");
+            ShowInfo(
+                $"有 {skipped.Count} 项删除被跳过：" + Environment.NewLine + Environment.NewLine +
+                "复制阶段出现失败，为避免目标目录比同步前更少，本次没有执行任何删除。" + Environment.NewLine +
+                "请先处理复制失败的原因（例如文件被占用、权限不足），再重新同步。");
+        }
+
+        if (result.FailedCount > 0)
         {
             ShowWarning(BuildListMessage(
                 $"有 {result.FailedCount} 项同步失败：",
                 result.Items
-                    .Where(static item => !item.Success)
+                    .Where(static item => !item.Success && !item.Skipped)
                     .Select(static item =>
                         $"{FolderSyncService.DescribeAction(item.Kind)} {item.RelativePath}：{item.Error}"),
                 MaxDisplayedMessages));
