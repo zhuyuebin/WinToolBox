@@ -124,15 +124,15 @@ Every user-facing document is bilingual: Chinese lives in `X.md` and English in 
 - **Language / framework**: C# · .NET 8 (`net8.0-windows`) · WinForms
 - **Tests**: xUnit (`dotnet test`)
 - **Dependencies**: no third-party commercial NuGet packages — .NET native APIs only
-- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.4.0`)
+- **Version**: maintained in one place, [`Directory.Build.props`](Directory.Build.props) (currently `0.4.8`)
 - **Continuous integration**: [`.github/workflows/release.yml`](.github/workflows/release.yml) — pushing a `v*` tag makes
   `windows-latest` check that the tag matches the version in `Directory.Build.props`, restore dependencies, build in
   Release, run `dotnet test`, publish the single-file executables of UsbBackup and FileMaster, pack them into
   `UsbBackup-win-x64.zip` and `FileMaster-win-x64.zip`, and create a GitHub Release:
 
   ```powershell
-  git tag v0.4.0
-  git push origin v0.4.0
+  git tag v0.4.8
+  git push origin v0.4.8
   ```
 
 Release checklist:

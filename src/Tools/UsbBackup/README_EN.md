@@ -10,7 +10,7 @@
 | --- | --- |
 | Program name | `UsbBackup.exe` (WinForms window application + resident tray icon, C# / .NET 8) |
 | Project location | `src/Tools/UsbBackup/` (outputs `UsbBackup.exe`) |
-| Version | `0.4.0`, controlled centrally by the repository root [`Directory.Build.props`](../../../Directory.Build.props) |
+| Version | `0.4.8`, controlled centrally by the repository root [`Directory.Build.props`](../../../Directory.Build.props) |
 | Shared library | References `src/WinToolBox.Core`, reusing its `Logger` / `ConfigManager` / `FileCopier` / `BackupMirrorService` / `UsbDetector` / `Notifier` |
 
 ## Requirements and How to Get It
@@ -168,7 +168,7 @@ Configuration example (`config.json`):
 ## Command-Line Arguments
 
 ```powershell
-# Show the version: prints something like “WinToolBox - U盘备份 UsbBackup 0.4.0”
+# Show the version: prints something like “WinToolBox - U盘备份 UsbBackup 0.4.8”
 UsbBackup.exe --version
 
 # Local smoke self-test: runs one pass of “first backup → incremental skip → incremental update →

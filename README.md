@@ -126,7 +126,7 @@ WinToolBox/
 - **语言 / 框架**：C# · .NET 8（`net8.0-windows`）· WinForms
 - **测试**：xUnit（`dotnet test`）
 - **依赖**：不引入任何第三方商业 NuGet 包，全部使用 .NET 原生 API
-- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.4.0`）
+- **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.4.8`）
 - **持续集成**：[`.github/workflows/release.yml`](.github/workflows/release.yml) —— 推送 `v*` 标签后，
   先**校验标签与 `Directory.Build.props` 中的 `<Version>` 一致**（不一致直接让工作流失败，避免发出
   「Release 标题是 v0.5.0、exe 里却是 0.4.0」的包），再在 `windows-latest` 上还原依赖、编译 Release、
@@ -134,8 +134,8 @@ WinToolBox/
   `FileMaster-win-x64.zip`，并创建 GitHub Release：
 
   ```powershell
-  git tag v0.4.0
-  git push origin v0.4.0
+  git tag v0.4.8
+  git push origin v0.4.8
   ```
 
 ### 发布检查清单
