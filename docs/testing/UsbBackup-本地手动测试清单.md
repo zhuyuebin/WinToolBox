@@ -1,6 +1,6 @@
 # UsbBackup 本地手动测试清单 v0.4.0
 
-[English](本地手动测试清单_EN.md) | [简体中文](本地手动测试清单.md)
+[English](UsbBackup-本地手动测试清单_EN.md) | [简体中文](UsbBackup-本地手动测试清单.md)
 
 > 适用程序：`UsbBackup.exe`（WinToolBox 的 U 盘备份工具，v0.4.0，win-x64 免安装单文件）
 > 适用系统：Windows 10 / 11

@@ -1,14 +1,14 @@
-# FolderCreator Manual Test Checklist (v0.4.0 · Six enhanced features)
+# FileMaster Folder-Structure Manual Test Checklist (v0.4.0 · Six enhanced features)
 
-[English](FolderCreator-本地手动测试清单_EN.md) | [简体中文](FolderCreator-本地手动测试清单.md)
+[English](FileMaster-文件夹结构-本地手动测试清单_EN.md) | [简体中文](FileMaster-文件夹结构-本地手动测试清单.md)
 
-> Applies to: `FolderCreator.exe` (WinToolBox's batch folder creation tool, win-x64 portable single file)
+> Applies to: `FileMaster.exe` (WinToolBox's batch folder creation tool; the former `FolderCreator.exe` was merged into FileMaster in v0.4.0, win-x64 portable single file)
 > Systems: Windows 10 / 11
 > Performed by: the user (manual operation on a physical machine in person)
 > Estimated time: about 20 minutes (6 core rounds)
 
 This checklist verifies the **6 features** added in this round: rule template management, reverse rule generation, placeholder file creation, multi-root batch creation, inspection report export, and directory tree text export.
-For the existing "Create Folders / Check Consistency" (including strict / lenient mode), keep referring to the relevant rounds in [UsbBackup and FolderCreator General Acceptance](本地手动测试清单.md).
+For the existing "Create Folders / Check Consistency" (including strict / lenient mode), keep referring to the relevant rounds in [UsbBackup and FileMaster General Acceptance](UsbBackup-本地手动测试清单.md).
 
 ---
 
@@ -16,7 +16,7 @@ For the existing "Create Folders / Check Consistency" (including strict / lenien
 
 1. **This tool really creates folders and files**: always work in a **dedicated test directory** first, and never experiment on important directories.
 2. **Placeholder files are only created in "truly empty" directories**: that is, a directory that has neither files nor subdirectories. Once a parent directory has a subdirectory, no `.gitkeep` is added to it.
-3. **The configuration files live in the user directory**: templates are stored in `%AppData%\WinToolBox\FolderCreator\templates.json`, and logs in `%LocalAppData%\WinToolBox\logs\`.
+3. **The configuration files live in the user directory**: templates are stored in `%AppData%\WinToolBox\FileMaster\templates.json`, and logs in `%LocalAppData%\WinToolBox\logs\`.
 
 ---
 
@@ -24,8 +24,8 @@ For the existing "Create Folders / Check Consistency" (including strict / lenien
 
 ### 1.1 Prepare the program
 
-- [ ] Download `FolderCreator-win-x64.zip` from the release page and extract it to the **desktop or another non-system directory** (for example `D:\Tools\FolderCreator\`).
-- [ ] **Double-click** `FolderCreator.exe` to start it; the main window should appear normally (title: `FolderCreator - 批量创建文件夹`, i.e. "FolderCreator - Batch Folder Creation").
+- [ ] Download `FileMaster-win-x64.zip` from the release page and extract it to the **desktop or another non-system directory** (for example `D:\Tools\FileMaster\`).
+- [ ] **Double-click** `FileMaster.exe` to start it; the main window should appear normally, then open the feature page this checklist covers via the menu 「文件管理」 (File management) → 「文件夹结构创建」 (Create folder structure).
 - [ ] Note the interface structure, which every later step will use:
   - Top toolbar: `模板：[下拉框]` (Template: [drop-down]) `[保存为模板]` (Save as Template) `[删除模板]` (Delete Template) …… `[从现有目录生成规则]` (Generate Rules from Existing Directory) `[导出检查报告]` (Export Inspection Report) `[导出目录树]` (Export Directory Tree)
   - Target area: `根目录：[输入框] [浏览…]` (Root directory: [text box] [Browse…]), `[ ] 启用多根目录` (Enable multiple root directories), `[ ] 为空目录创建占位文件（.gitkeep）` (Create placeholder file (.gitkeep) for empty directories)
@@ -46,7 +46,7 @@ D:\FCTest\项目B
 
 | Item | Path |
 | --- | --- |
-| Directory template library | `%AppData%\WinToolBox\FolderCreator\templates.json` |
+| Directory template library | `%AppData%\WinToolBox\FileMaster\templates.json` |
 | Run log | `%LocalAppData%\WinToolBox\logs\wintoolbox-yyyyMMdd.log` |
 | Exported directory tree | Chosen by you in the save dialog (default file name `目录树.txt`) |
 | Exported inspection report | Chosen by you in the save dialog (default file name `目录检查报告.md`) |
@@ -70,7 +70,7 @@ D:\FCTest\项目B
    ```
 
 2. In the top `模板` (Template) drop-down, **type directly** `我的测试模板` (My Test Template) (the drop-down is editable), then click `[保存为模板]` (Save as Template).
-3. Open `%AppData%\WinToolBox\FolderCreator\templates.json` in Notepad.
+3. Open `%AppData%\WinToolBox\FileMaster\templates.json` in Notepad.
 4. Clear the rules box, then select `我的测试模板` in the `模板` drop-down.
 5. Select the built-in template `Web 项目` (Web Project) (a dialog asks you to confirm overwriting) → then select `Python 项目` (Python Project).
 6. Select `我的测试模板` and click `[删除模板]` (Delete Template) → confirm.
@@ -268,7 +268,7 @@ D:\FCTest\项目B
 ## 4. What Information to Collect on Failure
 
 1. **Run log**: the contents of the `运行日志` (Run log) area at the bottom of the window, or that day's records in the log file `%LocalAppData%\WinToolBox\logs\wintoolbox-yyyyMMdd.log` (it states which directories failed and why).
-2. **Template library**: the contents of `%AppData%\WinToolBox\FolderCreator\templates.json` (for template-related problems).
+2. **Template library**: the contents of `%AppData%\WinToolBox\FileMaster\templates.json` (for template-related problems).
 3. **Steps to reproduce**: which button was clicked, and the **exact text** of the root directory and the rules (especially whether 「多根目录」 or 「占位文件」 was checked).
 4. **Screenshots of the interface**: the result tree + the status bar + the run log.
 5. **The actual on-disk result**: a screenshot taken in File Explorer for that directory after running 「显示 → 隐藏的项目」 (View → Hidden items).
@@ -278,4 +278,4 @@ D:\FCTest\项目B
 ## 5. Notes
 
 - The **core logic** of all 6 features (template read/write, rule generation, placeholder files, multi-root de-duplication and fault tolerance, report and directory tree text generation) is covered by **unit tests**, 322 test cases in total; this checklist is used to verify **the interface interaction and the real on-disk results**.
-- This checklist was written for the **standalone FolderCreator project** (`src/Tools/FolderCreator/`) and introduces no dependency on the main program (`WinToolBox.App`).
+- This checklist covers the **folder-structure features** of FileMaster (`src/Tools/FileMaster/`) and introduces no dependency on any main application.

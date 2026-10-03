@@ -2,7 +2,7 @@
 
 [English](README_EN.md) | [简体中文](README.md)
 
-> A WinToolBox sub-tool: **incrementally backs up** USB drives to a directory of your choice on a local hard disk. After you plug in a USB drive, **click 「立即备份」 (Back up now) manually** — the program never copies anything automatically.
+> A WinToolBox sub-tool: **incrementally backs up** USB drives to a directory of your choice on a local hard disk, **keeping 30 days of version history**. After you plug in a USB drive, **click 「立即备份」 (Back up now) manually** — the program never copies anything automatically.
 
 [← Back to WinToolBox overview](../../../README_EN.md)
 
@@ -11,7 +11,7 @@
 | Program name | `UsbBackup.exe` (WinForms window application + resident tray icon, C# / .NET 8) |
 | Project location | `src/Tools/UsbBackup/` (outputs `UsbBackup.exe`) |
 | Version | `0.4.0`, controlled centrally by the repository root [`Directory.Build.props`](../../../Directory.Build.props) |
-| Shared library | References `src/WinToolBox.Core`, reusing its `Logger` / `ConfigManager` / `FileCopier` / `UsbDetector` / `Notifier` |
+| Shared library | References `src/WinToolBox.Core`, reusing its `Logger` / `ConfigManager` / `FileCopier` / `BackupMirrorService` / `UsbDetector` / `Notifier` |
 
 ## Requirements and How to Get It
 
@@ -31,7 +31,7 @@ Download: open <https://github.com/zhuyuebin/WinToolBox/releases/latest>, downlo
 2. **Choose a target directory**: in 「备份设置」 (Backup settings), type the **backup target directory** or click 「浏览…」 (Browse…) to pick one (an empty directory on a local hard disk is recommended; **do not choose the USB drive itself**).
 3. **Adjust exclusions as needed**: in 「排除的文件后缀」 (Excluded file extensions), append the extensions you do not want to back up, separated by English commas (for example `.iso,.zip`), and then click 「保存设置」 (Save settings) — nothing takes effect unless you save.
 4. **Plug in the USB drive and back up manually**: click 「立即备份」 (Back up now) (or right-click the tray icon → 「立即备份」). The program performs one incremental backup for **every currently plugged-in** USB drive; when it finishes, a tray balloon pops up and the result is also written to 「运行日志」 (Run log).
-5. **Review and exit**: backed-up files go to `{target directory}\{volume label}_{volume serial number}\{yyyy-MM-dd}\`; click 「打开日志目录」 (Open log directory) to view the logs. **Closing the window only minimizes it to the tray**; to exit completely, click 「退出程序」 (Exit program) or right-click the tray icon → 「退出」 (Exit).
+5. **Review and exit**: the latest copy lives in `{target directory}\{volume label}_{volume serial number}\current\`, and deleted / overwritten older versions live in `...\history\{date}\` (**kept for 30 days by default**); click 「打开日志目录」 (Open log directory) to view the logs. **Closing the window only minimizes it to the tray**; to exit completely, click 「退出程序」 (Exit program) or right-click the tray icon → 「退出」 (Exit).
 
 ## Main Window Overview
 
@@ -42,6 +42,7 @@ The window title is `WinToolBox - U盘备份`, and from top to bottom it is divi
 | Backup settings | 「备份目标目录」 (Backup target directory) text box | Shows the currently configured backup target directory; it can be edited directly |
 | Backup settings | 「浏览…」 (Browse…) | Opens a folder selection dialog to choose the target directory; you must click 「保存设置」 (Save settings) afterwards |
 | Backup settings | 「排除的文件后缀」 (Excluded file extensions) text box | Extensions separated by English (Chinese is also accepted) commas, such as `.tmp,.part`; on save they are uniformly lowercased and prefixed with `.` |
+| Backup settings | 「历史版本保留」 (History retention) drop-down | Choose `7 days` / `30 days` (default) / `90 days` / `keep forever (no automatic cleanup)`; choosing 「永久保留」 turns the hint on the right into a red risk warning — the `history` directory is never cleaned automatically and disk usage keeps growing |
 | Backup settings | 「保存设置」 (Save settings) | Writes the configuration file and fills the normalized result back into the UI; when the target directory is empty it prompts 「请先选择备份目标目录」 (Please choose a backup target directory first) and does not save |
 | Actions | 「立即备份」 (Back up now) | One of the two ways to trigger a backup manually (the other is the tray right-click 「立即备份」). During a backup the button is disabled and the cursor becomes a wait cursor; repeated clicks are ignored. It only copies, and never executes any program on the USB drive |
 | Actions | 「刷新设备」 (Refresh devices) | Re-enumerates removable disks; the status bar shows 「已检测到 N 个 U 盘」 (Detected N USB drives) or 「未检测到 U 盘」 (No USB drive detected) |
@@ -68,25 +69,42 @@ The window title is `WinToolBox - U盘备份`, and from top to bottom it is divi
 
 ## Backup Rules
 
-### Target Path Template
+### Directory Layout (fixed folders + true incremental + soft-delete history)
 
 ```text
-{configured target directory}\{volume label}_{volume serial number}\{yyyy-MM-dd}\
+{configured target directory}\{volume label}_{volume serial number}\
+├─ current\                    ← the latest copy of the USB drive (updated incrementally; fixed path, no date)
+│  ├─ Documents\
+│  └─ Pictures\
+├─ history\                    ← deleted / overwritten older versions
+│  ├─ 2026-10-01\
+│  │  └─ accidentally-deleted-file.docx
+│  └─ 2026-10-03\
+│     └─ overwritten-old-version.docx
+└─ manifest.json               ← last backup time, file count, total size, history policy and comparison result
 ```
 
-For example, with the target directory `D:\UsbBackup`, volume label `MYUSB` and volume serial number `1A2B3C4D`, the backup on 2026-09-30 is written to `D:\UsbBackup\MYUSB_1A2B3C4D\2026-09-30\`.
+For example, with the target directory `D:\UsbBackup`, volume label `MYUSB` and volume serial number `1A2B3C4D`, the latest copy of the USB drive lives in `D:\UsbBackup\MYUSB_1A2B3C4D\current\`.
 
 - Devices are identified by **volume label + volume serial number + capacity**, **not by drive letter** (after moving to another USB port the drive letter changes from `E:` to `F:`, yet the backup still lands in the same device directory).
-- One date directory per day, so historical backups are never overwritten by new ones.
+- **Date-stamped target directories are no longer used**: one USB drive maps to exactly one backup root, and `current` always reflects that drive's latest state.
 - An empty volume label uses the `NOLABEL` placeholder, and an unreadable serial number uses `00000000`; illegal characters in the volume label are replaced with `_`.
 
-### Incremental Strategy
+### Incremental Strategy and Version History
 
-- **Copy only, never delete**: the program **never deletes** any file in the target directory, and does not modify anything on the USB drive either.
-- **Unmodified files are skipped**: judged by **modification time + size**; if the sizes are equal and the target is not older than the source, the file is treated as unmodified.
-- Only **new files** and **modified files** are copied; after copying, the target file's modification time is aligned with the source file so that the next comparison stays accurate.
-- Files deleted from the USB drive **remain** in the backup directory (historical snapshot semantics — no synchronized deletion).
-- A single file failure does not abort the whole backup run: the log records the failure count and the first 5 details, and the UI summarizes it as 「失败 K 个」 (K failed).
+| Scenario | Behaviour |
+| --- | --- |
+| A file is **added** on the USB drive | Copied to `current\` |
+| A file is **modified** on the USB drive | The new version is written to `current\`, and the **old version is moved first** into `history\{today}\` (keeping its relative path) || A file is **deleted** on the USB drive | The copy in `current\` is **moved** into `history\{today}\` — it is **not deleted**, so accidental deletions can be recovered |
+| The **same file has several older versions** on one day | Each version is archived separately (later ones get an `@time` suffix, e.g. `report@143005.txt`; same-second collisions get `-2`, `-3`), so **no version is ever overwritten or dropped**. If the path would become too long, conflicting versions go to `history\{date}\h{n}\{hash}{ext}` instead (dropping the original folder and readable name to make it actually fit) |
+| A file is **unchanged** | Skipped, but only after a content check, so that "same size and timestamp yet different content" is never missed forever |
+
+- **Strict content verification (on by default)**: small files of equal size get a full SHA256 comparison; files larger than 16 MiB use a compromise of "size + modification time + sampled hash of the first and last 64 KiB each". Files skipped by that compromise are explicitly labelled 「未做内容校验」 (not content-verified) in the log summary — the program never claims a verification it did not perform.
+- **`history` is kept for 30 days by default**: at the end of every backup, `history\{yyyy-MM-dd}\` folders older than the retention period are cleaned up. You can change this to 7 / 30 / 90 days in 「历史版本保留」; choosing 「永久保留」 (keep forever) shows a red disk-usage risk warning.
+- **File content in `current` is never deleted**: deletion semantics always degrade to "move into `history`".
+- A single file failure does not abort the whole backup run: at most the first 50 failure details plus the total count are kept, and both log and summary state the failure count.
+- Before copying, the program compares `DriveInfo.AvailableFreeSpace` against the total bytes to copy (**reserving extra space for `history`**); when space is insufficient it fails immediately with a "needed X / available Y" message.
+- Copying writes `{target name}.tmp` first and then atomically replaces the target, so a failure midway never leaves a truncated target file; `.tmp` leftovers from a forcefully interrupted run are cleaned up automatically on the next backup.
 
 ### Default Exclusions
 
@@ -119,9 +137,9 @@ This is a **deliberate design decision**, not something that was left out: `UsbW
 | --- | --- |
 | Configuration file | `%AppData%\WinToolBox\UsbBackup\config.json` (usually `C:\Users\<user name>\AppData\Roaming\WinToolBox\UsbBackup\config.json`) |
 | Log directory | `%LocalAppData%\WinToolBox\logs\` (usually `C:\Users\<user name>\AppData\Local\WinToolBox\logs\`) |
-| Log file | `wintoolbox-yyyyMMdd.log`, split by day, kept for 30 days by default (earlier logs are cleaned up at startup; the same file is shared with FolderCreator) |
+| Log file | `wintoolbox-yyyyMMdd.log`, split by day, kept for 30 days by default (earlier logs are cleaned up at startup; the same file is shared with FileMaster) |
 
-Configuration example (`config.json`, which has only these two fields):
+Configuration example (`config.json`):
 
 ```json
 {
@@ -131,7 +149,9 @@ Configuration example (`config.json`, which has only these two fields):
     ".tmp",
     ".part",
     ".crdownload"
-  ]
+  ],
+  "strictContentVerification": true,
+  "historyRetentionDays": 30
 }
 ```
 
@@ -139,6 +159,8 @@ Configuration example (`config.json`, which has only these two fields):
 | --- | --- | --- |
 | `backupTargetDirectory` | string | Backup target directory; leaving it empty means it is not configured yet, in which case 「立即备份」 (Back up now) does not run and prompts you to set the target directory first |
 | `excludedExtensions` | string[] | Excluded file extensions (case-insensitive; you may write `.tmp` or `tmp`, and on save they are uniformly lowercased and prefixed with `.`) |
+| `strictContentVerification` | bool | Whether to perform strict content verification, default `true`. When disabled only "size + modification time" is compared, and skipped files are labelled 「未做内容校验」 (not content-verified) in the summary |
+| `historyRetentionDays` | int | How many days to keep `history`, default `30`; `0` means **keep forever** (the UI then shows a red disk-usage risk warning). Negative values are normalized back to the default 30 |
 
 > **There is no switch field such as `autoBackupEnabled`**: backups can only be triggered manually. Such a leftover field in an old configuration is simply ignored, and it disappears after you click 「保存设置」 (Save settings) once to rewrite the file.
 > When the configuration file is missing, empty or corrupted, the program falls back to the default configuration and writes a WARN log entry, and **does not overwrite** your original file; click 「保存设置」 (Save settings) once in the main window to regenerate the canonical format (when writing it by hand, `#` comments and trailing commas are allowed).
@@ -149,8 +171,10 @@ Configuration example (`config.json`, which has only these two fields):
 # Show the version: prints something like “WinToolBox - U盘备份 UsbBackup 0.4.0”
 UsbBackup.exe --version
 
-# Local smoke self-test: runs one pass of “first copy → incremental skip → incremental update → exclusion rules → configuration read/write → USB drive enumeration”
-# in a temporary directory, without needing a real USB drive; 16 checks in total, and exit code 0 means all of them passed
+# Local smoke self-test: runs one pass of “first backup → incremental skip → incremental update →
+# old version moved to history → deletion on the USB drive soft-deleted into history →
+# exclusion rules → configuration read/write → USB drive enumeration”
+# in a temporary directory, without needing a real USB drive; 25 checks in total, and exit code 0 means all of them passed
 UsbBackup.exe --selftest
 UsbBackup.exe --selftest D:\selftest-report.txt   # write the report to the given file
 ```
@@ -174,6 +198,6 @@ UsbBackup.exe --selftest D:\selftest-report.txt   # write the report to the give
 ## Related Links
 
 - Repository overview: [`README_EN.md`](../../../README_EN.md)
-- Manual acceptance testing with a physical USB drive: [Local manual test checklist](../../../MD-files/本地手动测试清单_EN.md)
-- Sister tool: [FolderCreator User Guide](../FolderCreator/README_EN.md)
+- Manual acceptance testing with a physical USB drive: [UsbBackup manual test checklist](../../../docs/testing/UsbBackup-本地手动测试清单_EN.md)
+- Sister tool: [FileMaster User Guide](../FileMaster/README_EN.md)
 - Source code: `src/Tools/UsbBackup/` ([`Program.cs`](Program.cs), [`TrayApplicationContext.cs`](TrayApplicationContext.cs), [`MainForm.cs`](MainForm.cs), [`BackupService.cs`](BackupService.cs), [`UsbWatcher.cs`](UsbWatcher.cs), [`ProcessIntegrity.cs`](ProcessIntegrity.cs))

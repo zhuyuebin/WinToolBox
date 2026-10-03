@@ -16,11 +16,15 @@ WinToolBox 是一个面向 Windows 10/11 的**小工具集合**：每个工具�
 
 | 工具 | 类型 | 说明 | 文档 |
 | --- | --- | --- | --- |
-| **UsbBackup** | WinForms 桌面 + 托盘常驻 | U 盘备份工具（**手动触发**）：按“卷标 + 卷序列号 + 日期”把 U 盘增量备份到指定目录；主界面可视化管理备份路径与运行日志 | **[使用说明](src/Tools/UsbBackup/README.md)** |
+| **UsbBackup** | WinForms 桌面 + 托盘常驻 | U 盘备份工具（**手动触发**）：按“卷标 + 卷序列号”把 U 盘**增量备份 + 30 天版本历史**到指定目录（`current\` 为最新副本，被删除/被覆盖的旧版本保留在 `history\{日期}\`）；主界面可视化管理备份路径、历史保留策略与运行日志 | **[使用说明](src/Tools/UsbBackup/README.md)** |
 | **FileMaster** | WinForms 桌面 | 文件与文件夹管理工具：批量创建 / 检查文件夹结构（原 FolderCreator 全部功能），并新增 8 项文件管理功能：批量重命名、空文件夹清理、时间戳批量修改、批量移动 / 自动分类、文件夹差异比对、重复文件查找、文件夹同步 / 镜像、文件占用解锁 | **[使用说明](src/Tools/FileMaster/README.md)** |
-| **WinToolBox.Core** | 类库 | 共享基础能力：配置读写、日志、托盘通知、增量复制引擎、U 盘识别、备份业务规则、哈希引擎 | **[类库说明](src/WinToolBox.Core/README.md)** |
+| **WinToolBox.Core** | 类库 | 共享基础能力：配置读写、日志、托盘通知、增量复制引擎（含内容校验）、U 盘镜像备份与版本历史、U 盘识别、备份业务规则、哈希引擎 | **[类库说明](src/WinToolBox.Core/README.md)** |
 
 > 运行环境：Windows 10 / 11（x64）。发布包为**自包含单文件**，目标机器**无需预装 .NET**。
+
+> UsbBackup 的可选配置项：`strictContentVerification`（是否做严格内容校验，默认 `true`）、
+> `historyRetentionDays`（history 保留天数，默认 `30`，`0` = 永久保留）；
+> 详见 [配置文件与日志](src/Tools/UsbBackup/README.md#配置文件与日志)。
 
 ### FileMaster 的文件管理功能
 
@@ -89,6 +93,7 @@ WinToolBox/
 ├─ tests/
 │  ├─ WinToolBox.Core.Tests/       # Core 单元测试（xUnit，含 HashEngine 测试）
 │  └─ FileMaster.Tests/            # FileMaster 单元测试（xUnit）
+├─ docs/                           # 文档中心（入口 docs/README.md）
 ├─ Directory.Build.props           # 统一版本号与包元数据
 ├─ WinToolBox.sln
 ├─ README.md                       # 仓库总览（中文）
@@ -97,7 +102,8 @@ WinToolBox/
 
 每个工具目录下都有自己的 `README.md`，包含完整的使用说明与常见问题。
 
-所有文档均为中英双语：中文为 `X.md`，英文为同目录下的 `X_EN.md`（每份文档顶部可一键切换语言）。
+绝大多数文档为中英双语：中文为 `X.md`，英文为同目录下的 `X_EN.md`（每份文档顶部可一键切换语言）。
+例外：[FileMaster 本地手动测试清单](docs/testing/FileMaster-本地手动测试清单.md) 目前只有中文版。
 
 ---
 
@@ -105,12 +111,13 @@ WinToolBox/
 
 | 文档 | 内容 |
 | --- | --- |
+| [文档中心](docs/README.md) | 全部文档索引：审计报告 / 修复报告 / 手动测试清单 / 历史任务书归档 |
 | [UsbBackup 使用说明](src/Tools/UsbBackup/README.md) | 主界面与托盘用法、备份规则、配置与日志路径、命令行参数、常见问题 |
 | [FileMaster 使用说明](src/Tools/FileMaster/README.md) | 规则语法、父级自动补齐、严格/宽松检查模式、六项文件夹增强功能，以及 8 项文件管理功能（重命名 / 空目录 / 时间戳 / 自动分类 / 差异比对 / 重复文件 / 同步镜像 / 占用解锁） |
 | [WinToolBox.Core 类库说明](src/WinToolBox.Core/README.md) | 共享库的类型清单、典型用法与设计约定 |
-| [FileMaster 本地手动测试清单](FileMaster-本地手动测试清单.md) | 8 项文件管理功能的逐项验收步骤（建议真机手动执行） |
-| [本地手动测试清单](MD-files/本地手动测试清单.md) | U 盘插拔 / 备份 / 增量的真机验收步骤（由使用者手动执行） |
-| [FolderCreator 本地手动测试清单](MD-files/FolderCreator-本地手动测试清单.md) | 文件夹结构创建 / 检查等六项增强功能的逐项验收步骤（FileMaster 同样适用） |
+| [FileMaster 本地手动测试清单](docs/testing/FileMaster-本地手动测试清单.md) | 8 项文件管理功能的逐项验收步骤（建议真机手动执行） |
+| [UsbBackup 本地手动测试清单](docs/testing/UsbBackup-本地手动测试清单.md) | U 盘插拔 / 备份 / 增量的真机验收步骤（由使用者手动执行） |
+| [FileMaster 文件夹结构 本地手动测试清单](docs/testing/FileMaster-文件夹结构-本地手动测试清单.md) | 文件夹结构创建 / 检查等六项增强功能的逐项验收步骤 |
 
 ---
 
@@ -121,16 +128,24 @@ WinToolBox/
 - **依赖**：不引入任何第三方商业 NuGet 包，全部使用 .NET 原生 API
 - **版本号**：统一在 [`Directory.Build.props`](Directory.Build.props) 中维护（当前 `0.4.0`）
 - **持续集成**：[`.github/workflows/release.yml`](.github/workflows/release.yml) —— 推送 `v*` 标签后，
-  在 `windows-latest` 上还原依赖、编译 Release、运行 `dotnet test`、分别发布 UsbBackup 与 FileMaster 的
-  单文件 exe、打包为 `UsbBackup-win-x64.zip` 与 `FileMaster-win-x64.zip`，并创建 GitHub Release：
+  先**校验标签与 `Directory.Build.props` 中的 `<Version>` 一致**（不一致直接让工作流失败，避免发出
+  「Release 标题是 v0.5.0、exe 里却是 0.4.0」的包），再在 `windows-latest` 上还原依赖、编译 Release、
+  运行单元测试、分别发布 UsbBackup 与 FileMaster 的单文件 exe、打包为 `UsbBackup-win-x64.zip` 与
+  `FileMaster-win-x64.zip`，并创建 GitHub Release：
 
   ```powershell
   git tag v0.4.0
   git push origin v0.4.0
   ```
 
+### 发布检查清单
+
+1. 更新 [`Directory.Build.props`](Directory.Build.props) 里的 `<Version>`；
+2. 同步更新中英双语文档（`README.md` 与 `README_EN.md`，以及改动涉及的工具文档）；
+3. 打与之匹配的标签 `v<version>` 并推送（标签与版本不一致时 CI 会拒绝发布）。
+
 > 云端 CI 没有物理 U 盘，`UsbDetector` / `WM_DEVICECHANGE` 的运行期行为不在 CI 中验证（但必须编译通过）；
-> 真实插拔与增量备份请按[本地手动测试清单](MD-files/本地手动测试清单.md)在本机验收。
+> 真实插拔与增量备份请按[UsbBackup 本地手动测试清单](docs/testing/UsbBackup-本地手动测试清单.md)在本机验收。
 
 ---
 

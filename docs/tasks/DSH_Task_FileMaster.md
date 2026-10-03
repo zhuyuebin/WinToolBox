@@ -1,7 +1,7 @@
 # DSH 任务书：FileMaster 文件管理工具全面开发
 
 ## 1. 任务背景与目标
-当前仓库为 WinToolBox（https://github.com/zhiyuebin/WinToolBox），是一个 Windows 小工具集合（monorepo），使用 C# (.NET 8) + WinForms + xUnit。
+当前仓库为 WinToolBox（https://github.com/zhuyuebin/WinToolBox），是一个 Windows 小工具集合（monorepo），使用 C# (.NET 8) + WinForms + xUnit。
 
 仓库现有结构：
 - src/WinToolBox.Core/          # 核心共享库（已有 Logger、Notifier、FileCopier、FileScanner 等）

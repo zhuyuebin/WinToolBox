@@ -1,14 +1,14 @@
-# FolderCreator 本地手动测试清单（v0.4.0 · 六项增强功能）
+# FileMaster 文件夹结构 本地手动测试清单（v0.4.0 · 六项增强功能）
 
-[English](FolderCreator-本地手动测试清单_EN.md) | [简体中文](FolderCreator-本地手动测试清单.md)
+[English](FileMaster-文件夹结构-本地手动测试清单_EN.md) | [简体中文](FileMaster-文件夹结构-本地手动测试清单.md)
 
-> 适用程序：`FolderCreator.exe`（WinToolBox 的文件夹批量创建工具，win-x64 免安装单文件）
+> 适用程序：`FileMaster.exe`（WinToolBox 的文件夹批量创建工具；原 `FolderCreator.exe` 已在 v0.4.0 并入 FileMaster，win-x64 免安装单文件）
 > 适用系统：Windows 10 / 11
 > 执行人：用户（本人在物理机上手动操作）
 > 预计耗时：约 20 分钟（6 个核心轮次）
 
 本清单验证本轮新增的 **6 项功能**：规则模板管理、反向生成规则、占位文件创建、多根目录批量创建、检查报告导出、目录树文本导出。
-原有的「创建文件夹 / 检查一致性」（含严格 / 宽松模式）请继续参考 [UsbBackup 与 FolderCreator 通用验收](本地手动测试清单.md) 中的相关轮次。
+原有的「创建文件夹 / 检查一致性」（含严格 / 宽松模式）请继续参考 [UsbBackup 与 FileMaster 通用验收](UsbBackup-本地手动测试清单.md) 中的相关轮次。
 
 ---
 
@@ -16,7 +16,7 @@
 
 1. **本工具会真实创建文件夹和文件**：请务必先在一个**专门的测试目录**里操作，不要拿重要目录试。
 2. **占位文件只在“真正为空”的目录里创建**：即该目录既没有文件、也没有子目录。父目录一旦有了子目录就不会再加 `.gitkeep`。
-3. **配置文件在用户目录**：模板保存在 `%AppData%\WinToolBox\FolderCreator\templates.json`，日志在 `%LocalAppData%\WinToolBox\logs\`。
+3. **配置文件在用户目录**：模板保存在 `%AppData%\WinToolBox\FileMaster\templates.json`，日志在 `%LocalAppData%\WinToolBox\logs\`。
 
 ---
 
@@ -24,8 +24,8 @@
 
 ### 1.1 准备程序
 
-- [ ] 从发布页下载 `FolderCreator-win-x64.zip`，解压到**桌面或其他非系统目录**（例如 `D:\Tools\FolderCreator\`）。
-- [ ] **双击** `FolderCreator.exe` 启动；主界面应正常出现（标题：`FolderCreator - 批量创建文件夹`）。
+- [ ] 从发布页下载 `FileMaster-win-x64.zip`，解压到**桌面或其他非系统目录**（例如 `D:\Tools\FileMaster\`）。
+- [ ] **双击** `FileMaster.exe` 启动；主界面应正常出现，从菜单「文件管理 → 文件夹结构创建」进入本清单对应的功能页。
 - [ ] 记下界面结构，后面每一步都会用到：
   - 顶部工具栏：`模板：[下拉框]` `[保存为模板]` `[删除模板]` …… `[从现有目录生成规则]` `[导出检查报告]` `[导出目录树]`
   - 目标区：`根目录：[输入框] [浏览…]`、`[ ] 启用多根目录`、`[ ] 为空目录创建占位文件（.gitkeep）`
@@ -46,7 +46,7 @@ D:\FCTest\项目B
 
 | 内容 | 路径 |
 | --- | --- |
-| 目录模板库 | `%AppData%\WinToolBox\FolderCreator\templates.json` |
+| 目录模板库 | `%AppData%\WinToolBox\FileMaster\templates.json` |
 | 运行日志 | `%LocalAppData%\WinToolBox\logs\wintoolbox-yyyyMMdd.log` |
 | 导出的目录树 | 由你在保存对话框中选择（默认文件名 `目录树.txt`） |
 | 导出的检查报告 | 由你在保存对话框中选择（默认文件名 `目录检查报告.md`） |
@@ -70,7 +70,7 @@ D:\FCTest\项目B
    ```
 
 2. 在顶部「模板」下拉框里**直接输入** `我的测试模板`（下拉框可编辑），点 `[保存为模板]`。
-3. 用记事本打开 `%AppData%\WinToolBox\FolderCreator\templates.json`。
+3. 用记事本打开 `%AppData%\WinToolBox\FileMaster\templates.json`。
 4. 清空规则框，然后在「模板」下拉框里选择 `我的测试模板`。
 5. 选择内置模板 `Web 项目`（弹窗确认覆盖）→ 再选择 `Python 项目`。
 6. 选中 `我的测试模板`，点 `[删除模板]` → 确认。
@@ -268,7 +268,7 @@ D:\FCTest\项目B
 ## 4. 失败时该收集什么信息
 
 1. **运行日志**：界面底部「运行日志」区的内容，或日志文件 `%LocalAppData%\WinToolBox\logs\wintoolbox-yyyyMMdd.log` 当天的记录（其中会写明失败的目录与原因）。
-2. **模板库**：`%AppData%\WinToolBox\FolderCreator\templates.json` 的内容（模板相关问题时）。
+2. **模板库**：`%AppData%\WinToolBox\FileMaster\templates.json` 的内容（模板相关问题时）。
 3. **操作复现步骤**：点了哪个按钮、根目录与规则的**原文**（尤其是是否勾选了「多根目录」「占位文件」）。
 4. **界面截图**：结果树 + 状态栏 + 运行日志三处。
 5. **实际磁盘结果**：在资源管理器里对该目录执行一次「显示 → 隐藏的项目」后截图。
@@ -278,4 +278,4 @@ D:\FCTest\项目B
 ## 5. 说明
 
 - 全部 6 项功能的**核心逻辑**（模板读写、规则生成、占位文件、多根目录去重与容错、报告与目录树文本生成）都有**单元测试**覆盖，共 322 个测试用例；本清单用于验证**界面交互与真实磁盘结果**。
-- 本清单基于**独立 FolderCreator 项目**（`src/Tools/FolderCreator/`）编写，未引入任何主程序（`WinToolBox.App`）依赖。
+- 本清单围绕 FileMaster 的**文件夹结构功能**（`src/Tools/FileMaster/`）编写，不依赖任何主程序。

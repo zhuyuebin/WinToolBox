@@ -39,7 +39,7 @@ Download: open <https://github.com/zhuyuebin/WinToolBox/releases/latest>, downlo
 | **Directory tree export** | 「导出目录树」 (Export directory tree) | Produces standard `tree`-style text (`├─`/`└─`/`│`) plus a directory count at the end, with the same default exclusions |
 
 > A 「运行日志」 (Run log) panel at the bottom of the window shows operation logs live (they are also written to `%LocalAppData%\WinToolBox\logs\`).
-> Step-by-step acceptance steps for the folder-structure features are in the [FolderCreator manual test checklist](../../../MD-files/FolderCreator-本地手动测试清单_EN.md).
+> Step-by-step acceptance steps for the folder-structure features are in the [FileMaster folder-structure manual test checklist](../../../docs/testing/FileMaster-文件夹结构-本地手动测试清单_EN.md).
 
 ## File management features (8)
 
@@ -56,7 +56,7 @@ All of them live in the **「文件管理(F)」 (File management)** menu of the 
 | 7 | **Folder sync / mirror** | One-way copy (keeps extra target content), one-way sync (deletes extra target content), mirror (target equals source); optional content comparison by hash | Generates a plan first (deletes red, copies green, directory creation steel blue) with confirmation; deletes go to the recycle bin by default; identical or nested source/target pairs are rejected |
 | 8 | **File unlock** | Uses the Windows **Restart Manager** to list the processes holding a file (or the files inside a folder): PID, process name, type, restartable flag | Query only; confirmation before killing a process; **critical system processes are always refused**; **no registry access at all** |
 
-> Step-by-step acceptance steps for all 8 features are in the [FileMaster manual test checklist](../../../FileMaster-本地手动测试清单.md) (Chinese).
+> Step-by-step acceptance steps for all 8 features are in the [FileMaster manual test checklist](../../../docs/testing/FileMaster-本地手动测试清单.md) (Chinese).
 
 ## Rule syntax
 
