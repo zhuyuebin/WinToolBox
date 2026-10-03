@@ -27,7 +27,7 @@
 
 | 清单 | 适用 |
 | --- | --- |
-| [FileMaster 本地手动测试清单](testing/FileMaster-本地手动测试清单.md)（仅中文） | 8 项文件管理功能：批量重命名 / 空目录清理 / 时间戳 / 自动分类 / 差异比对 / 重复文件 / 同步镜像 / 占用解锁 |
+| [FileMaster 本地手动测试清单](testing/FileMaster-本地手动测试清单.md) · [EN](testing/FileMaster-本地手动测试清单_EN.md) | 8 项文件管理功能：批量重命名 / 空目录清理 / 时间戳 / 自动分类 / 差异比对 / 重复文件 / 同步镜像 / 占用解锁 |
 | [FileMaster 文件夹结构 本地手动测试清单](testing/FileMaster-文件夹结构-本地手动测试清单.md) · [EN](testing/FileMaster-文件夹结构-本地手动测试清单_EN.md) | 文件夹结构六项增强功能（原 FolderCreator 功能，v0.4.0 起并入 FileMaster） |
 | [UsbBackup 本地手动测试清单](testing/UsbBackup-本地手动测试清单.md) · [EN](testing/UsbBackup-本地手动测试清单_EN.md) | U 盘插拔 / 备份 / 版本历史的实体机验收（同时包含文件夹结构通用验收轮次） |
 

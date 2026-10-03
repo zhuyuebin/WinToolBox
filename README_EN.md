@@ -101,7 +101,7 @@ WinToolBox/
 
 Every tool folder contains its own `README.md` with full usage instructions and troubleshooting.
 
-Most documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` beside it (each one has a language switcher at the top). The exception is the FileMaster manual test checklist, which is currently Chinese only.
+Every user-facing document is bilingual: Chinese lives in `X.md` and English in `X_EN.md` beside it (each one has a language switcher at the top). Process documents (the audit report, the fix reports and the historical task books) and the documentation hub [docs/README.md](docs/README.md) are Chinese only.
 
 ---
 
@@ -113,7 +113,7 @@ Most documents are bilingual: Chinese lives in `X.md` and English in `X_EN.md` b
 | [UsbBackup user guide](src/Tools/UsbBackup/README_EN.md) | Main window and tray usage, backup rules, configuration and log paths, command-line options, FAQ |
 | [FileMaster user guide](src/Tools/FileMaster/README_EN.md) | Rule syntax, automatic parent completion, strict/loose check modes, the six folder-structure enhancements, and the 8 file management features (rename / empty folders / timestamps / auto-classify / diff / duplicates / sync & mirror / file unlock) |
 | [WinToolBox.Core library guide](src/WinToolBox.Core/README_EN.md) | Type list, typical usage and design conventions of the shared library |
-| [FileMaster manual test checklist](docs/testing/FileMaster-本地手动测试清单.md) (Chinese) | Item-by-item acceptance steps for the 8 file management features (best run on a real machine) |
+| [FileMaster manual test checklist](docs/testing/FileMaster-本地手动测试清单_EN.md) | Item-by-item acceptance steps for the 8 file management features (best run on a real machine) |
 | [UsbBackup manual test checklist](docs/testing/UsbBackup-本地手动测试清单_EN.md) | On-device acceptance steps for USB plug/unplug, backup and version history (performed manually by the user) |
 | [FileMaster folder-structure manual test checklist](docs/testing/FileMaster-文件夹结构-本地手动测试清单_EN.md) | Item-by-item acceptance steps for the six folder-structure enhancements |
 
